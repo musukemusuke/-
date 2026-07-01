@@ -2,7 +2,7 @@ import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from voice_manager import handle_voice_state_update, handle_guild_channel_delete, handle_guild_channel_update
+from voice_manager import setup_voice_events
 
 # .envファイルから環境変数を読み込み
 load_dotenv()
@@ -245,22 +245,8 @@ async def on_message(message):
     # 通常のコマンドも処理できるようにする
     await bot.process_commands(message)
 
-# 聞き専用テキストチャンネルの履歴をアーカイブするチャンネルID
-ARCHIVE_CHANNEL_ID = 1521780512795132015  # アーカイブ用チャンネルのID
-# 休止チャンネルでは聞き専用チャンネルを作成しない
-IGNORE_VOICE_CHANNEL_IDS = [
-    # 休止ボイスチャンネルのIDをここに記載
-]
-
-# ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
-@bot.event
-async def on_voice_state_update(member, before, after):
-    await handle_voice_state_update(bot, member, before, after, IGNORE_VOICE_CHANNEL_IDS, ARCHIVE_CHANNEL_ID)
-
-# サーバーのチャンネルが削除されたときのイベント
-@bot.event
-async def on_guild_channel_delete(channel):
-    await handle_guild_channel_delete(bot, channel, ARCHIVE_CHANNEL_ID)
+# ボイスイベントをセットアップ
+setup_voice_events(bot)
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
