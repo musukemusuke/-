@@ -257,10 +257,11 @@ async def archive_text_channel_history(channel, bot):
         # 全ての既存の権限上書きをリセット（実行環境のdiscord.pyバージョンに合わせた方法）
         for target, overwrite in list(archive_channel.overwrites.items()):
             await archive_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
-        # 必要な権限だけを設定：デフォルトロールは閲覧のみ、Botは全権限
-        await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=True, send_messages=False, read_message_history=True)
+        # 必要な権限だけを設定：サーバーオーナーとBotだけが閲覧可能（鯖主専用設定）
+        await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False, read_message_history=False)
+        await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True, send_messages=True, read_message_history=True)
         await archive_channel.set_permissions(bot.user, read_messages=True, send_messages=True)
-        print("アーカイブの権限設定完了: 全サーバーメンバーが過去の会話を見返せるようになりました（送信はBotのみ可能）")
+        print("アーカイブの権限設定完了: サーバーオーナーだけがアーカイブを閲覧できるようになりました")
         
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", files=files)
         # サーバー側の自動同期で発生する余分な権限上書きを完全に消去する最終処理
