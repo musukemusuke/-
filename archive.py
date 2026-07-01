@@ -274,13 +274,17 @@ async def archive_text_channel_history(channel, bot):
         print("アーカイブの権限設定完了: 会話に参加していたメンバーが履歴を見返せるようになりました")
         
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", files=files)
-        # サーバー側で自動的に個人ロールに権限が付与されるケースに備えて、再度権限をリセット
+        # サーバー側で自動的に個人ロールに権限が付与されるケースに備えて、二度クリーンアップ
         await asyncio.sleep(2)  # 自動同期が完了するのを少し待つ
         for target, overwrite in list(archive_channel.overwrites.items()):
             # 個人ロール（サーバーオーナー、Bot、メンバー以外）の権限を削除
             if not isinstance(target, discord.Member) and target != archive_channel.guild.default_role and target != archive_channel.guild.owner and target != bot.user:
                 await archive_channel.set_permissions(target, None)
-        print(f"{channel.name} のアーカイブが完了しました。全{len(messages)}件のメッセージを保存しました。")
+        await asyncio.sleep(2)  # 再度同期を待ってから確実に削除
+        for target, overwrite in list(archive_channel.overwrites.items()):
+            if not isinstance(target, discord.Member) and target != archive_channel.guild.default_role and target != archive_channel.guild.owner and target != bot.user:
+                await archive_channel.set_permissions(target, None)
+        print(f"{channel.name} のアーカイブが完了しました。全{len(messages)}件のメッセージを保存し、全ての不要な権限を削除しました。")
     except Exception as e:
         print(f"PDF生成中にエラーが発生しました: {e}")
         print(traceback.format_exc())

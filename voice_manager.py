@@ -1,4 +1,5 @@
 import re
+import asyncio
 import discord
 from archive import archive_text_channel_history
 
@@ -36,9 +37,22 @@ def setup_voice_events(bot):
                     before_listen_channel = channel
                     break
             if before_listen_channel is not None and not member.bot:
-                # 個人ロールではなく、メンバー個別に権限を削除
+                # メンバー個別の権限と個人ロールの両方を確実に削除
                 await before_listen_channel.set_permissions(member, send_messages=False, read_messages=False, read_message_history=False)
-                print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を削除しました。")
+                # メンバーの個人ロールも取得して権限を削除
+                member_role = None
+                for role in member.roles:
+                    if role.name == member.display_name:
+                        member_role = role
+                        break
+                if member_role is not None:
+                    await before_listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
+                # 最後に再度クリーンアップして不要な権限を残さない
+                await asyncio.sleep(1)
+                for target, overwrite in list(before_listen_channel.overwrites.items()):
+                    if not isinstance(target, discord.Member) and target != before.channel.guild.default_role and target != before.channel.guild.owner and target != bot.user:
+                        await before_listen_channel.set_permissions(target, None)
+                print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を完全に削除しました。")
             
             # 移動後、移動元のチャンネルにbot以外のメンバーが残っているか確認
             before_human_members = [m for m in before.channel.members if not m.bot]
@@ -117,19 +131,38 @@ def setup_voice_events(bot):
                 )
                 # 親カテゴリの権限と同期しないように手動で設定（Discord.pyのバージョン互換性対策）
                 await listen_channel.edit(sync_permissions=False)
-                print(f"新規作成した聞き専チャンネル {listen_channel.name} には、現在ボイスに参加中の{len(after.channel.members)}名のメンバーだけに権限を付与しました")
+                # サーバー側で自動的に個人ロールに権限が付与されるケースに備えて、二度クリーンアップ
+                await asyncio.sleep(1)
+                for target, overwrite in list(listen_channel.overwrites.items()):
+                    if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
+                        await listen_channel.set_permissions(target, None)
+                await asyncio.sleep(1)
+                for target, overwrite in list(listen_channel.overwrites.items()):
+                    if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
+                        await listen_channel.set_permissions(target, None)
+                print(f"新規作成した聞き専チャンネル {listen_channel.name} には、現在ボイスに参加中の{len(after.channel.members)}名のメンバーだけに権限を付与し、自動的に付与された個人ロールの権限を完全に削除しました")
                 # ボイスチャンネルIDとテキストチャンネルIDを紐付けて保存（一時的なボイスチャンネル対策）
                 voice_to_text_channel_map[after.channel.id] = listen_channel.id
                 # 作成したチャンネルに案内メッセージを投稿
                 await listen_channel.send(f"📢 こちらは{after.channel.mention}の聞き専用テキストチャンネルです。チャンネル内の会話を聞きながら、テキストでコメントしたい方はこちらで交流できます！")
-                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。ボイスチャンネルID{after.channel.id}と紐付けました。")
+                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。ボイスチャンネルID{after.channel.id}と紐付け、通話に参加しているメンバー以外は完全に閲覧不可に設定しました。")
             else:
                 # Botは個人ロールを持っていないのでスキップ
                 if member.bot:
                     return
-                # 個人ロールではなく、メンバー個別に権限を付与
+                # まずサーバー側で自動的に付与された可能性のある全ての個人ロールの権限を削除
+                await asyncio.sleep(1)
+                for target, overwrite in list(listen_channel.overwrites.items()):
+                    if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
+                        await listen_channel.set_permissions(target, None)
+                # 参加したメンバー個別に権限を付与
                 await listen_channel.set_permissions(member, send_messages=True, read_messages=True, read_message_history=True)
-                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、テキストチャンネルの権限を付与しました。")
+                # 最後に再度クリーンアップして、絶対に不要な権限を残さない
+                await asyncio.sleep(1)
+                for target, overwrite in list(listen_channel.overwrites.items()):
+                    if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
+                        await listen_channel.set_permissions(target, None)
+                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、テキストチャンネルの権限を付与しました。自動的に付与された個人ロールの権限も削除し、通話参加者以外は閲覧不可です。")
         
         # ボイスチャンネルから完全に退出した場合
         if after.channel is None and before.channel is not None:
@@ -152,16 +185,22 @@ def setup_voice_events(bot):
                                 break
                 # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
                 if listen_channel is not None and not member.bot:
-                    # メンバーの個人ロールを取得
+                    # メンバー個別の権限と個人ロールの両方を確実に削除
+                    await listen_channel.set_permissions(member, send_messages=False, read_messages=False, read_message_history=False)
+                    # メンバーの個人ロールも取得して権限を削除
                     member_role = None
                     for role in member.roles:
                         if role.name == member.display_name:
                             member_role = role
                             break
-                    # 個人ロールの権限を削除
                     if member_role is not None:
                         await listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
-                        print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、個人ロール {member_role.name} のテキストチャンネル権限を削除しました。")
+                    # 最後に再度クリーンアップして不要な権限を残さない
+                    await asyncio.sleep(1)
+                    for target, overwrite in list(listen_channel.overwrites.items()):
+                        if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
+                            await listen_channel.set_permissions(target, None)
+                    print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、テキストチャンネルの権限を完全に削除しました。")
             else:
                 # 人間のメンバーが誰もいなくなったので聞き専用テキストチャンネルを削除
                 category = before.channel.category
@@ -253,9 +292,15 @@ def setup_voice_events(bot):
                 )
                 # 親カテゴリの権限と同期しないように手動で設定（Discord.pyのバージョン互換性対策）
                 await new_listen_channel.edit(sync_permissions=False)
+                # サーバー側で自動的に個人ロールに権限が付与されるケースに備えて、再度権限をリセット
+                await asyncio.sleep(2)  # 自動同期が完了するのを少し待つ
+                for target, overwrite in list(new_listen_channel.overwrites.items()):
+                    # 個人ロール（メンバー個別以外のロール）の権限を削除
+                    if not isinstance(target, discord.Member) and target != after.guild.default_role and target != after.guild.owner and target != bot.user:
+                        await new_listen_channel.set_permissions(target, None)
                 # 新しいボイスチャンネルIDと紐付け
                 voice_to_text_channel_map[after.id] = new_listen_channel.id
-                print(f"新しいボイスチャンネル{after.name}用にテキストチャンネル {new_listen_channel.name} を作成し、ID{after.id}と紐付けました。現在のメンバー{len(after.members)}名だけに権限を付与しています。")
+                print(f"新しいボイスチャンネル{after.name}用にテキストチャンネル {new_listen_channel.name} を作成しました。自動的に付与された個人ロールの権限を削除し、現在のメンバー{len(after.members)}名だけが閲覧可能です。")
                 await new_listen_channel.send(f"🆕 ボイスチャンネルの名前が{after.mention}に変更されたので、新しい聞き専用テキストチャンネルを作成しました！")
 
     # サーバーのチャンネルが削除されたときのイベント
