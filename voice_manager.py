@@ -203,7 +203,10 @@ def setup_voice_events(bot):
                 if text_channel.name.startswith("聞き専用-"):
                     channel_suffix = text_channel.name[len("聞き専用-"):]
                     if channel_suffix == deleted_channel_normalized:
-                        # 削除前に履歴をアーカイブ
-                        await archive_text_channel_history(text_channel, bot)
-                        await text_channel.delete()
-                        print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
+                         try:
+                             # 削除前に履歴をアーカイブ
+                             await archive_text_channel_history(text_channel, bot)
+                             await text_channel.delete()
+                             print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
+                         except discord.errors.NotFound:
+                             print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
