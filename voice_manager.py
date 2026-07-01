@@ -87,7 +87,7 @@ def setup_voice_events(bot):
             # まだ存在しなければテキストチャンネルとして作成
             if listen_channel is None:
                 # サーバーのデフォルトロールを取得
-                guild = after.guild
+                guild = after.channel.guild
                 # デフォルトは閲覧も送信も不可、ボイスチャンネルに入っているメンバーだけが利用可能
                 permissions = {
                     guild.default_role: discord.PermissionOverwrite(
