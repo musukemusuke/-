@@ -2,6 +2,9 @@ import re
 import discord
 from archive import archive_text_channel_history
 
+# アーカイブ処理済みのテキストチャンネルIDを保存するセット（重複アーカイブ防止）
+archived_channel_ids = set()
+
 # 休止ボイスチャンネルIDリスト
 IGNORE_VOICE_CHANNEL_IDS = [
     # 休止ボイスチャンネルのIDをここに記載
@@ -46,10 +49,15 @@ def setup_voice_events(bot):
                 # 人間が誰もいなくなったら移動元の聞き専用テキストチャンネルを削除
                 for channel in before_category.text_channels:
                     if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
-                        # 削除前に履歴をアーカイブ
-                        await archive_text_channel_history(channel, bot)
-                        await channel.delete()
-                        print(f"移動によりチャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
+                        # 既にアーカイブ済みのチャンネルは処理をスキップ
+                        if channel.id not in archived_channel_ids:
+                            archived_channel_ids.add(channel.id)
+                            # 削除前に履歴をアーカイブ
+                            await archive_text_channel_history(channel, bot)
+                            await channel.delete()
+                            print(f"移動によりチャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
+                        else:
+                            print(f"テキストチャンネル{channel.name}は既にアーカイブ処理済みのため、重複処理をスキップしました。")
         
         # 新しくボイスチャンネルに参加した場合、または別チャンネルから移動してきた場合
         if after.channel is not None:
@@ -240,23 +248,33 @@ def setup_voice_events(bot):
             # まずdiscord.utils.getで直接検索を試みる
             text_channel = discord.utils.get(category.text_channels, name=f"聞き専用-{deleted_channel_normalized}")
             if text_channel:
-                try:
-                    # 削除前に履歴をアーカイブ
-                    await archive_text_channel_history(text_channel, bot)
-                    await text_channel.delete()
-                    print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
-                except discord.errors.NotFound:
-                    print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
+                # 既にアーカイブ済みのチャンネルは処理をスキップ
+                if text_channel.id not in archived_channel_ids:
+                    archived_channel_ids.add(text_channel.id)
+                    try:
+                        # 削除前に履歴をアーカイブ
+                        await archive_text_channel_history(text_channel, bot)
+                        await text_channel.delete()
+                        print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
+                    except discord.errors.NotFound:
+                        print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
+                else:
+                    print(f"テキストチャンネル{text_channel.name}は既にアーカイブ処理済みのため、重複処理をスキップしました。")
             else:
                 # 直接検索で見つからなければループで検索
                 for c in category.text_channels:
                     if c.name.startswith("聞き専用-"):
                         channel_suffix = c.name[len("聞き専用-"):]
                         if channel_suffix == deleted_channel_normalized:
-                             try:
-                                 # 削除前に履歴をアーカイブ
-                                 await archive_text_channel_history(c, bot)
-                                 await c.delete()
-                                 print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {c.name} も削除しました。")
-                             except discord.errors.NotFound:
-                                 print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
+                             # 既にアーカイブ済みのチャンネルは処理をスキップ
+                             if c.id not in archived_channel_ids:
+                                 archived_channel_ids.add(c.id)
+                                 try:
+                                     # 削除前に履歴をアーカイブ
+                                     await archive_text_channel_history(c, bot)
+                                     await c.delete()
+                                     print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {c.name} も削除しました。")
+                                 except discord.errors.NotFound:
+                                     print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
+                             else:
+                                 print(f"テキストチャンネル{c.name}は既にアーカイブ処理済みのため、重複処理をスキップしました。")
