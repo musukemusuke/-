@@ -239,12 +239,8 @@ async def on_message(message):
         print(f"メンバー {member.display_name} のプライベートスレッドを作成しました。")
         return
     
-    # それ以外のチャンネルで「プライベートスレッド」が送られた場合の処理
-    if "プライベートスレッド" in message.content:
-        await message.channel.send(f"{message.author.mention} プライベートスレッドは愚痴・独り言チャンネルでのみ作成できます。")
-    
     # 通常のコマンドも処理できるようにする
-    await bot.process_commands(message)
+            await bot.process_commands(message)
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
