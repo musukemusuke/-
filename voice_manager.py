@@ -113,7 +113,8 @@ def setup_voice_events(bot):
                 listen_channel = await category.create_text_channel(
                     name=f"聞き専用-{current_channel_normalized}",
                     overwrites=permissions,
-                    reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用テキストチャンネルを作成"
+                    reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用テキストチャンネルを作成",
+                    sync_permissions=False
                 )
                 # 念のため、作成後に全ての既存ロールの権限を再確認して、現在のメンバー以外の権限を削除
                 for target, overwrite in list(listen_channel.overwrites.items()):
@@ -260,7 +261,8 @@ def setup_voice_events(bot):
                 new_listen_channel = await category.create_text_channel(
                     name=f"聞き専用-{after_normalized}",
                     overwrites=permissions,
-                    reason=f"ボイスチャンネル{after.name}に名前が変更されたので新しい聞き専用テキストチャンネルを作成"
+                    reason=f"ボイスチャンネル{after.name}に名前が変更されたので新しい聞き専用テキストチャンネルを作成",
+                    sync_permissions=False
                 )
                 # 念のため、作成後に全ての既存ロールの権限を再確認して、現在のメンバー以外の権限を削除
                 for target, overwrite in list(new_listen_channel.overwrites.items()):
