@@ -37,7 +37,9 @@ async def on_ready():
             if member.bot:
                 continue
             # メンバーが自分の名前のロールを持っているか確認
-            has_role = any(role.name == member.display_name for role in member.roles)
+            # ロール名は最大100文字なので切り詰める
+            role_name = member.display_name[:100]
+            has_role = any(role.name == role_name for role in member.roles)
             if not has_role:
                 print(f"メンバー {member.display_name} にロールが付与されていないので作成します...")
                 role_color = discord.Color.random()
@@ -63,7 +65,7 @@ async def on_ready():
                 member_permissions.change_nickname = True
 
                 new_role = await guild.create_role(
-                    name=member.display_name,
+                    name=role_name,
                     color=role_color,
                     permissions=member_permissions,
                     reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
