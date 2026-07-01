@@ -117,20 +117,7 @@ def setup_voice_events(bot):
                 )
                 # 親カテゴリの権限と同期しないように手動で設定（Discord.pyのバージョン互換性対策）
                 await listen_channel.edit(sync_permissions=False)
-                # 念のため、作成後に全ての既存ロールの権限を再確認して、現在のメンバー以外の権限を削除
-                for target, overwrite in list(listen_channel.overwrites.items()):
-                    # デフォルトロールは既に権限オフなのでスキップ
-                    if target == guild.default_role:
-                        continue
-                    # 現在ボイスチャンネルにいるメンバーの個人ロール以外は権限をオフに
-                    is_current_member = False
-                    for voice_member in after.channel.members:
-                        if hasattr(target, 'name') and target.name == voice_member.display_name:
-                            is_current_member = True
-                            break
-                    if not is_current_member:
-                        await listen_channel.set_permissions(target, read_messages=False, send_messages=False)
-                print(f"新規作成した聞き専チャンネルの権限をクリーンアップ: 現在のメンバー以外の権限を削除")
+                print(f"新規作成した聞き専チャンネル {listen_channel.name} には、現在ボイスに参加中の{len(after.channel.members)}名のメンバーだけに権限を付与しました")
                 # ボイスチャンネルIDとテキストチャンネルIDを紐付けて保存（一時的なボイスチャンネル対策）
                 voice_to_text_channel_map[after.channel.id] = listen_channel.id
                 # 作成したチャンネルに案内メッセージを投稿
@@ -266,22 +253,9 @@ def setup_voice_events(bot):
                 )
                 # 親カテゴリの権限と同期しないように手動で設定（Discord.pyのバージョン互換性対策）
                 await new_listen_channel.edit(sync_permissions=False)
-                # 念のため、作成後に全ての既存ロールの権限を再確認して、現在のメンバー以外の権限を削除
-                for target, overwrite in list(new_listen_channel.overwrites.items()):
-                    # デフォルトロールは既に権限オフなのでスキップ
-                    if target == guild.default_role:
-                        continue
-                    # 現在ボイスチャンネルにいるメンバーの個人ロール以外は権限をオフに
-                    is_current_member = False
-                    for voice_member in after.members:
-                        if hasattr(target, 'name') and target.name == voice_member.display_name:
-                            is_current_member = True
-                            break
-                    if not is_current_member:
-                        await new_listen_channel.set_permissions(target, read_messages=False, send_messages=False)
                 # 新しいボイスチャンネルIDと紐付け
                 voice_to_text_channel_map[after.id] = new_listen_channel.id
-                print(f"新しいボイスチャンネル{after.name}用にテキストチャンネル {new_listen_channel.name} を作成し、ID{after.id}と紐付けました。権限をクリーンアップしました。")
+                print(f"新しいボイスチャンネル{after.name}用にテキストチャンネル {new_listen_channel.name} を作成し、ID{after.id}と紐付けました。現在のメンバー{len(after.members)}名だけに権限を付与しています。")
                 await new_listen_channel.send(f"🆕 ボイスチャンネルの名前が{after.mention}に変更されたので、新しい聞き専用テキストチャンネルを作成しました！")
 
     # サーバーのチャンネルが削除されたときのイベント
