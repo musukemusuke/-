@@ -20,6 +20,9 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member):
+    # Botは処理をスキップ
+    if member.bot:
+        return
     guild = member.guild
     role_name = member.display_name
     role_color = discord.Color.random()
@@ -65,6 +68,9 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
+    # Botは処理をスキップ
+    if member.bot:
+        return
     guild = member.guild
     # 退出したメンバーの名前と一致するロールを検索して削除
     for role in guild.roles:
@@ -77,7 +83,9 @@ async def on_member_remove(member):
 
 @bot.event
 async def on_member_update(before, after):
-    # ニックネームが変更された場合のみ処理
+    # Botは処理をスキップ、ニックネームが変更された場合のみ処理
+    if after.bot or before.display_name == after.display_name:
+        return
     if before.display_name != after.display_name:
         guild = after.guild
         old_role_name = before.display_name
