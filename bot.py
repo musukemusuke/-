@@ -247,27 +247,44 @@ async def on_message(message):
 # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
 @bot.event
 async def on_voice_state_update(member, before, after):
-    # 新しくボイスチャンネルに参加した場合（前はどこにもいなかった）
+    # 新しくボイスチャンネルに参加した場合
     if before.channel is None and after.channel is not None:
         # 現在のボイスチャンネルの親カテゴリーを取得
         category = after.channel.category
-        # すでに「聞き専用-○○」のようなテキストチャンネルが存在するか確認
-        listen_channel_exists = any(
-            channel.name.startswith("聞き専用-") and channel.category == category
-            for channel in category.text_channels
-        )
+        # 対象の聞き専用テキストチャンネルを探す
+        listen_channel = None
+        for channel in category.text_channels:
+            if channel.name.startswith("聞き専用-") and channel.name.endswith(after.channel.name):
+                listen_channel = channel
+                break
+        
         # まだ存在しなければテキストチャンネルとして作成
-        if not listen_channel_exists:
+        if listen_channel is None:
             # サーバーのデフォルトロールを取得
             guild = after.channel.guild
-            # 全員が読み取り可能だが、メッセージを送信できないように権限を設定
+            # デフォルトは閲覧も送信も不可、ボイスチャンネルに入っているメンバーだけが利用可能
             permissions = {
                 guild.default_role: discord.PermissionOverwrite(
-                    send_messages=True,   # メッセージ送信可能（マイクが使えない人もテキストで参加）
-                    read_messages=True,   # 閲覧は可能
-                    read_message_history=True
+                    send_messages=False,      # デフォルトは送信不可
+                    read_messages=False,     # デフォルトは閲覧も不可（入ってない人は見れない）
+                    read_message_history=False
                 )
             }
+            # 現在ボイスチャンネルにいるメンバー全員の個人ロールに送信権限を付与
+            for voice_member in after.channel.members:
+                # メンバーの個人ロールを探す
+                voice_member_role = None
+                for role in voice_member.roles:
+                    if role.name == voice_member.display_name:
+                        voice_member_role = role
+                        break
+                # 個人ロールが見つかったら権限を設定
+                if voice_member_role is not None:
+                    permissions[voice_member_role] = discord.PermissionOverwrite(
+                        send_messages=True,
+                        read_messages=True,
+                        read_message_history=True
+                    )
             listen_channel = await category.create_text_channel(
                 name=f"聞き専用-{after.channel.name}",
                 overwrites=permissions,
@@ -276,12 +293,43 @@ async def on_voice_state_update(member, before, after):
             # 作成したチャンネルに案内メッセージを投稿
             await listen_channel.send(f"📢 こちらは{after.channel.mention}の聞き専用テキストチャンネルです。チャンネル内の会話を聞きながら、テキストでコメントしたい方はこちらで交流できます！")
             print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。")
+        else:
+            # メンバーの個人ロールを取得
+            member_role = None
+            for role in member.roles:
+                if role.name == member.display_name:
+                    member_role = role
+                    break
+            # 個人ロールに送信権限を付与
+            if member_role is not None:
+                await listen_channel.set_permissions(member_role, send_messages=True, read_messages=True, read_message_history=True)
+                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、個人ロール {member_role.name} にテキストチャンネルの権限を付与しました。")
     
-    # ボイスチャンネルから全員が退出したら、聞き専用テキストチャンネルも自動削除
+    # ボイスチャンネルから退出した場合
     if after.channel is None and before.channel is not None:
         # 元のチャンネルにまだ誰かいるか確認
-        if len(before.channel.members) == 0:
-            # 同じカテゴリー内の聞き専用テキストチャンネルを探して削除
+        if len(before.channel.members) > 0:
+            # 対象の聞き専用テキストチャンネルを探す
+            category = before.channel.category
+            listen_channel = None
+            for channel in category.text_channels:
+                if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    listen_channel = channel
+                    break
+            # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
+            if listen_channel is not None:
+                # メンバーの個人ロールを取得
+                member_role = None
+                for role in member.roles:
+                    if role.name == member.display_name:
+                        member_role = role
+                        break
+                # 個人ロールの権限を削除
+                if member_role is not None:
+                    await listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
+                    print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、個人ロール {member_role.name} のテキストチャンネル権限を削除しました。")
+        else:
+            # 誰もいなくなったら聞き専用テキストチャンネルを削除
             category = before.channel.category
             for channel in category.text_channels:
                 if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
