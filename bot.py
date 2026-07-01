@@ -1,10 +1,14 @@
 import os
-import traceback
+import io
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from archive_utils import create_chat_archive
-from voice_utils import VoiceChannelMonitor
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from PIL import Image
+import pypdfium2 as pdfium
 
 # .envファイルから環境変数を読み込み
 load_dotenv()
@@ -250,15 +254,155 @@ async def on_message(message):
 # 聞き専用テキストチャンネルの履歴をアーカイブするチャンネルID
 ARCHIVE_CHANNEL_ID = 1521780512795132015  # アーカイブ用チャンネルのID
 
-# ボイスチャンネル監視で無視するチャンネルID（休憩所などの常設ボイスチャンネル）
-IGNORE_VOICE_CHANNEL_IDS = [
-    # ここに休憩所などの常設ボイスチャンネルIDを追加してください
-]
-
-# VoiceChannelMonitorのインスタンスを作成
-voice_monitor = VoiceChannelMonitor(bot, IGNORE_VOICE_CHANNEL_IDS)
-
-
+# チャット履歴をPDFに生成する関数
+def create_chat_pdf(messages, channel_name):
+    # PDFの基本設定（A4サイズ）
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4  # A4のサイズを取得
+    
+    # 日本語フォントを登録（環境に応じて自動選択）
+    try:
+        # Windows環境: MSゴシック
+        font_path = "msgothic.ttc"
+        pdfmetrics.registerFont(TTFont('jp_font', font_path))
+        print("create_chat_pdf: MSゴシックフォントを使用")
+    except Exception as e:
+        print(f"create_chat_pdf: MSゴシック登録失敗: {e}")
+        try:
+            # Linux環境: Ubuntu標準のNoto Sans CJK JP
+            import os
+            font_paths = [
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/NotoSansCJK-Regular.ttc",
+            ]
+            font_path = None
+            for path in font_paths:
+                if os.path.exists(path):
+                    font_path = path
+                    break
+            if font_path:
+                pdfmetrics.registerFont(TTFont('jp_font', font_path))
+                print(f"create_chat_pdf: Noto Sansフォントを使用 (path={font_path})")
+            else:
+                raise Exception("フォントがどのパスにも存在しません")
+        except Exception as e:
+            print(f"create_chat_pdf: フォント登録失敗: {e}")
+            # フォント一覧を出力
+            import glob
+            font_files = glob.glob("/usr/share/fonts/**/*.ttc", recursive=True) + glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
+            print(f"利用可能なフォントファイル: {font_files}")
+            raise
+    
+    # 背景色を設定（PDFは黒背景にするために矩形を描画）
+    c.setFillColorRGB(54/255, 57/255, 63/255)  # Discordの黒背景色
+    c.rect(0, 0, width, height, fill=True, stroke=False)
+    
+    # テキスト描画設定
+    margin = 50  # ページの余白
+    line_height = 25  # 1行の高さ
+    current_y = height - margin  # 上から描画開始
+    page_num = 1  # 現在のページ番号
+    
+    # タイトルを描画（白色）
+    c.setFillColorRGB(1, 1, 1)  # 白
+    c.setFont("jp_font", 20)
+    c.drawString(margin, current_y, f"アーカイブ: {channel_name}")
+    current_y -= line_height * 2  # タイトル分のスペース
+    
+    # メッセージを1件ずつ描画
+    c.setFont("jp_font", 12)
+    for idx, message in enumerate(messages):
+        author = message.author.display_name
+        content = message.content if message.content else "(添付ファイル等)"
+        
+        # ページの下まで来たら新しいページを作成
+        if current_y < margin + line_height:
+            c.showPage()
+            page_num += 1
+            # 新しいページの背景を描画
+            c.setFillColorRGB(54/255, 57/255, 63/255)
+            c.rect(0, 0, width, height, fill=True, stroke=False)
+            c.setFillColorRGB(1, 1, 1)
+            c.setFont("jp_font", 12)
+            current_y = height - margin
+        
+        # ユーザー名を青色で描画
+        c.setFillColorRGB(114/255, 137/255, 218/255)  # Discordの青色
+        c.drawString(margin, current_y, f"{author}:")
+        
+        # メッセージ内容を白色で描画
+        c.setFillColorRGB(1, 1, 1)
+        author_text_width = pdfmetrics.stringWidth(f"{author}: ", "jp_font", 12)
+        # 長いメッセージは改行して描画
+        content_lines = content.split('\n')
+        first_line = content_lines[0]
+        c.drawString(margin + author_text_width, current_y, first_line)
+        # 2行目以降を描画
+        for line in content_lines[1:]:
+            current_y -= line_height
+            if current_y < margin:
+                # ページをめくる
+                c.showPage()
+                page_num += 1
+                c.setFillColorRGB(54/255, 57/255, 63/255)
+                c.rect(0, 0, width, height, fill=True, stroke=False)
+                c.setFillColorRGB(1, 1, 1)
+                c.setFont("jp_font", 12)
+                current_y = height - margin
+            c.drawString(margin, current_y, line)
+        
+        current_y -= line_height
+    
+    # 最後にフッターを描画
+    if current_y < margin + line_height:
+        c.showPage()
+        page_num += 1
+        c.setFillColorRGB(54/255, 57/255, 63/255)
+        c.rect(0, 0, width, height, fill=True, stroke=False)
+        current_y = height - margin
+    c.setFillColorRGB(185/255, 187/255, 190/255)  # 薄い灰色
+    c.drawString(margin, current_y, f"全{len(messages)}件のメッセージ / {page_num}ページ")
+    
+    # PDFを保存
+    c.save()
+    buffer.seek(0)
+    print(f"create_chat_pdf: PDF生成完了、チャンネル名={channel_name}, メッセージ数={len(messages)}, ページ数={page_num}")
+    
+    # PDFを画像に変換
+    try:
+        print("PDFを画像に変換開始")
+        pdf = pdfium.PdfDocument(buffer.getvalue())
+        # 複数ページがある場合は全ページを縦に連結した画像を作成
+        page_images = []
+        for page in pdf:
+            bitmap = page.render(scale=2)  # 高解像度でレンダリング
+            pil_image = bitmap.to_pil()
+            page_images.append(pil_image)
+        
+        # 全ページを連結して1枚の画像にする
+        total_width = max(img.width for img in page_images)
+        total_height = sum(img.height for img in page_images)
+        combined_image = Image.new('RGB', (total_width, total_height))
+        y_offset = 0
+        for img in page_images:
+            combined_image.paste(img, (0, y_offset))
+            y_offset += img.height
+        
+        # 連結した画像をBytesIOに保存
+        img_buffer = io.BytesIO()
+        combined_image.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        print("PDFから画像への変換完了")
+        # PDFバッファを巻き戻して返却
+        buffer.seek(0)
+        return buffer, img_buffer
+    except Exception as e:
+        print(f"PDFから画像への変換に失敗: {e}")
+        # 画像変換に失敗してもPDFは返却する
+        buffer.seek(0)
+        return buffer, None
 
 # テキストチャンネルのメッセージ履歴を画像でアーカイブチャンネルに送信する関数
 async def archive_text_channel_history(channel):
@@ -282,8 +426,9 @@ async def archive_text_channel_history(channel):
     
     # チャットPDFを生成
     try:
+        import traceback
         print(f"PDF生成開始: {channel.name}, メッセージ数: {len(messages)}")
-        pdf_file, img_file = create_chat_archive(messages, channel.name)
+        pdf_file, img_file = create_chat_pdf(messages, channel.name)
         print("PDF生成完了、ファイルオブジェクト作成")
         # 添付ファイルを準備
         files = []
@@ -313,15 +458,141 @@ async def archive_text_channel_history(channel):
 # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
 @bot.event
 async def on_voice_state_update(member, before, after):
-    # 聞き専用チャンネルの作成処理
-    await voice_monitor.check_and_create_listen_channel(member, before, after)
-    # ボイスチャンネルが空になった場合の削除処理
-    listen_channel = await voice_monitor.check_and_delete_listen_channel(member, before, after)
-    # 削除対象の聞き専用チャンネルが取得できたらアーカイブしてから削除
-    if listen_channel:
-        await archive_text_channel_history(listen_channel)
-        await listen_channel.delete()
-        print(f"タイマー経過により聞き専用テキストチャンネル {listen_channel.name} を削除しました。")
+    # 休止チャンネルでは聞き専用チャンネルを作成しない
+    IGNORE_VOICE_CHANNEL_IDS = [
+        # 休止ボイスチャンネルのIDをここに記載
+    ]
+    # ボイスチャンネル間を移動した場合（前のチャンネルも後のチャンネルも存在する）
+    if before.channel is not None and after.channel is not None and before.channel.id != after.channel.id:
+        # 移動元のチャンネルの聞き専用テキストチャンネルの権限を削除
+        before_category = before.channel.category
+        before_listen_channel = None
+        for channel in before_category.text_channels:
+            if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                before_listen_channel = channel
+                break
+        if before_listen_channel is not None and not member.bot:
+            # 移動元メンバーの個人ロールを取得して権限を削除
+            member_role = None
+            for role in member.roles:
+                if role.name == member.display_name:
+                    member_role = role
+                    break
+            if member_role is not None:
+                await before_listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
+                print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を削除しました。")
+        
+        # 移動後、移動元のチャンネルにbot以外のメンバーが残っているか確認
+        before_human_members = [m for m in before.channel.members if not m.bot]
+        if len(before_human_members) == 0:
+            # 人間が誰もいなくなったら移動元の聞き専用テキストチャンネルを削除
+            for channel in before_category.text_channels:
+                if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    # 削除前に履歴をアーカイブ
+                    await archive_text_channel_history(channel)
+                    await channel.delete()
+                    print(f"移動によりチャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
+    
+    # 新しくボイスチャンネルに参加した場合、または別チャンネルから移動してきた場合
+    if after.channel is not None:
+        # 休止チャンネルや「個室を作る」チャンネルでは処理をスキップ
+        if after.channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in after.channel.name or "個室を作る" in after.channel.name:
+            return
+        # 現在のボイスチャンネルの親カテゴリーを取得
+        category = after.channel.category
+        # 対象の聞き専用テキストチャンネルを探す
+        listen_channel = None
+        for channel in category.text_channels:
+            if channel.name.startswith("聞き専用-") and channel.name.endswith(after.channel.name):
+                listen_channel = channel
+                break
+        
+        # まだ存在しなければテキストチャンネルとして作成
+        if listen_channel is None:
+            # サーバーのデフォルトロールを取得
+            guild = after.channel.guild
+            # デフォルトは閲覧も送信も不可、ボイスチャンネルに入っているメンバーだけが利用可能
+            permissions = {
+                guild.default_role: discord.PermissionOverwrite(
+                    send_messages=False,      # デフォルトは送信不可
+                    read_messages=False,     # デフォルトは閲覧も不可（入ってない人は見れない）
+                    read_message_history=False
+                )
+            }
+            # 現在ボイスチャンネルにいるメンバー全員の個人ロールに送信権限を付与
+            for voice_member in after.channel.members:
+                # Botは個人ロールを持っていないのでスキップ
+                if voice_member.bot:
+                    continue
+                # メンバーの個人ロールを探す
+                voice_member_role = None
+                for role in voice_member.roles:
+                    if role.name == voice_member.display_name:
+                        voice_member_role = role
+                        break
+                # 個人ロールが見つかったら権限を設定
+                if voice_member_role is not None:
+                    permissions[voice_member_role] = discord.PermissionOverwrite(
+                        send_messages=True,
+                        read_messages=True,
+                        read_message_history=True
+                    )
+            listen_channel = await category.create_text_channel(
+                name=f"聞き専用-{after.channel.name}",
+                overwrites=permissions,
+                reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用テキストチャンネルを作成"
+            )
+            # 作成したチャンネルに案内メッセージを投稿
+            await listen_channel.send(f"📢 こちらは{after.channel.mention}の聞き専用テキストチャンネルです。チャンネル内の会話を聞きながら、テキストでコメントしたい方はこちらで交流できます！")
+            print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。")
+        else:
+            # Botは個人ロールを持っていないのでスキップ
+            if member.bot:
+                return
+            # メンバーの個人ロールを取得
+            member_role = None
+            for role in member.roles:
+                if role.name == member.display_name:
+                    member_role = role
+                    break
+            # 個人ロールに送信権限を付与
+            if member_role is not None:
+                await listen_channel.set_permissions(member_role, send_messages=True, read_messages=True, read_message_history=True)
+                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、個人ロール {member_role.name} にテキストチャンネルの権限を付与しました。")
+    
+    # ボイスチャンネルから完全に退出した場合
+    if after.channel is None and before.channel is not None:
+        # 元のチャンネルにbot以外のメンバーがまだ残っているか確認
+        remaining_humans = [m for m in before.channel.members if not m.bot]
+        if len(remaining_humans) > 0:
+            # まだ人間が残っているので、退出したメンバーの権限だけ削除
+            category = before.channel.category
+            listen_channel = None
+            for channel in category.text_channels:
+                if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    listen_channel = channel
+                    break
+            # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
+            if listen_channel is not None and not member.bot:
+                # メンバーの個人ロールを取得
+                member_role = None
+                for role in member.roles:
+                    if role.name == member.display_name:
+                        member_role = role
+                        break
+                # 個人ロールの権限を削除
+                if member_role is not None:
+                    await listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
+                    print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、個人ロール {member_role.name} のテキストチャンネル権限を削除しました。")
+        else:
+            # 人間のメンバーが誰もいなくなったので聞き専用テキストチャンネルを削除
+            category = before.channel.category
+            for channel in category.text_channels:
+                if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    # 削除前に履歴をアーカイブ
+                    await archive_text_channel_history(channel)
+                    await channel.delete()
+                    print(f"チャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
 
 # サーバーのチャンネルが更新されたときのイベント（名前変更などを検知）
 @bot.event
@@ -343,6 +614,7 @@ async def on_guild_channel_update(before, after):
             new_name = f"聞き専用-{after.name}"
             await old_listen_channel.edit(name=new_name)
             print(f"ボイスチャンネル {before.name} が{after.name}に名前変更されたので、テキストチャンネルを{new_name}に変更しました。")
+            # チャンネルのトピックやメッセージも更新（必要に応じて）
             await old_listen_channel.send(f"🔄 ボイスチャンネルの名前が{after.mention}に変更されたので、このテキストチャンネルの名前も{new_name}に更新しました！")
 
 # サーバーのチャンネルが削除されたときのイベント
@@ -359,6 +631,7 @@ async def on_guild_channel_delete(channel):
             return
         for text_channel in category.text_channels:
             if text_channel.name.startswith("聞き専用-") and text_channel.name.endswith(channel.name):
+                # 削除前に履歴をアーカイブ
                 await archive_text_channel_history(text_channel)
                 await text_channel.delete()
                 print(f"ボイスチャンネル {channel.name} が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
