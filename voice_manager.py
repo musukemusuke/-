@@ -5,6 +5,9 @@ from archive import archive_text_channel_history
 # アーカイブ処理済みのテキストチャンネルIDを保存するセット（重複アーカイブ防止）
 archived_channel_ids = set()
 
+# ボイスチャンネルIDと紐づくテキストチャンネルIDのマップ（一時的なボイスチャンネルの名前変更対策）
+voice_to_text_channel_map = {}
+
 # 休止ボイスチャンネルIDリスト
 IGNORE_VOICE_CHANNEL_IDS = [
     # 休止ボイスチャンネルのIDをここに記載
@@ -116,9 +119,11 @@ def setup_voice_events(bot):
                     overwrites=permissions,
                     reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用テキストチャンネルを作成"
                 )
+                # ボイスチャンネルIDとテキストチャンネルIDを紐付けて保存（一時的なボイスチャンネル対策）
+                voice_to_text_channel_map[after.channel.id] = listen_channel.id
                 # 作成したチャンネルに案内メッセージを投稿
                 await listen_channel.send(f"📢 こちらは{after.channel.mention}の聞き専用テキストチャンネルです。チャンネル内の会話を聞きながら、テキストでコメントしたい方はこちらで交流できます！")
-                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。")
+                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。ボイスチャンネルID{after.channel.id}と紐付けました。")
             else:
                 # Botは個人ロールを持っていないのでスキップ
                 if member.bot:
@@ -183,6 +188,8 @@ def setup_voice_events(bot):
             # 休止チャンネルや「個室を作る」チャンネルは処理しない
             if "休止" in after.name or "個室を作る" in after.name:
                 return
+            # 一時的なボイスチャンネル（名前変更可能なチャンネル）の場合は、テキストチャンネルの名前更新だけを行い、重複作成を完全に防止
+            # Discordの一時的なボイスチャンネルは名前変更時に内部的に削除→作成されることがあるため、既存のテキストチャンネルを再利用
             # 元の名前の聞き専用テキストチャンネルを探す（Discordのチャンネル名仕様に合わせて正規化）
             category = after.category
             before_normalized = normalize_channel_name(before.name)
@@ -245,8 +252,18 @@ def setup_voice_events(bot):
             if category is None:
                 return
             deleted_channel_normalized = normalize_channel_name(channel.name)
-            # まずdiscord.utils.getで直接検索を試みる
-            text_channel = discord.utils.get(category.text_channels, name=f"聞き専用-{deleted_channel_normalized}")
+            # マップに紐付けられたテキストチャンネルを優先的に取得（一時的なボイスチャンネル対策）
+            text_channel = None
+            if channel.id in voice_to_text_channel_map:
+                # マップに登録されているテキストチャンネルIDからチャンネルを取得
+                text_channel_id = voice_to_text_channel_map[channel.id]
+                text_channel = discord.utils.get(category.text_channels, id=text_channel_id)
+                print(f"マップから紐づくテキストチャンネルを発見: ID={text_channel_id}, 名前={text_channel.name if text_channel else '未発見'}")
+                # 処理が終わったらマップから削除
+                del voice_to_text_channel_map[channel.id]
+            # マップになければ通常の名前検索
+            if not text_channel:
+                text_channel = discord.utils.get(category.text_channels, name=f"聞き専用-{deleted_channel_normalized}")
             if text_channel:
                 # 既にアーカイブ済みのチャンネルは処理をスキップ
                 if text_channel.id not in archived_channel_ids:
