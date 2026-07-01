@@ -14,10 +14,13 @@ ARCHIVE_CHANNEL_ID = 1521780512795132015  # アーカイブ用チャンネルの
 
 # チャット履歴をPDFに生成し画像に変換する関数
 def create_chat_pdf(messages, channel_name):
-    # PDFの基本設定（A4サイズ）
+    # PDFの基本設定：Discordのチャット欄のアスペクト比に近いサイズに調整（幅800px相当、高さは可変）
+    # 単位をポイントに変換（1px ≈ 0.75pt、Discordのチャットは通常幅約800pxで表示されるため、それに合わせる）
+    discord_chat_width = 600  # pt単位（800px * 0.75）
+    page_height = 841.89  # A4の高さを維持（長いチャットでも複数ページで対応）
     buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4  # A4のサイズを取得
+    c = canvas.Canvas(buffer, pagesize=(discord_chat_width, page_height))
+    width, height = discord_chat_width, page_height
     
     # 日本語フォントを登録（環境に応じて自動選択）
     try:
@@ -57,20 +60,20 @@ def create_chat_pdf(messages, channel_name):
     c.setFillColorRGB(54/255, 57/255, 63/255)  # Discordの黒背景色
     c.rect(0, 0, width, height, fill=True, stroke=False)
     
-    # テキスト描画設定
-    margin = 50  # ページの余白
-    line_height = 25  # 1行の高さ
+    # テキスト描画設定：Discordの表示サイズに合わせて調整
+    margin = 30  # ページの左右余白を狭くする
+    line_height = 22  # 1行の高さをDiscordの行間に近づける
     current_y = height - margin  # 上から描画開始
     page_num = 1  # 現在のページ番号
     
     # タイトルを描画（白色）
     c.setFillColorRGB(1, 1, 1)  # 白
-    c.setFont("jp_font", 20)
+    c.setFont("jp_font", 18)
     c.drawString(margin, current_y, f"アーカイブ: {channel_name}")
     current_y -= line_height * 2  # タイトル分のスペース
     
-    # メッセージを1件ずつ描画
-    c.setFont("jp_font", 12)
+    # メッセージを1件ずつ描画：Discordのフォントサイズ（14px相当）に合わせる
+    c.setFont("jp_font", 11)
     for idx, message in enumerate(messages):
         # 特殊文字を可能な限り通常の文字に変換（おしゃれフォント対策）
         author = message.author.display_name
@@ -90,14 +93,15 @@ def create_chat_pdf(messages, channel_name):
             c.setFont("jp_font", 12)
             current_y = height - margin
         
-        # ユーザー名を青色で描画
-        c.setFillColorRGB(114/255, 137/255, 218/255)  # Discordの青色
-        c.drawString(margin, current_y, f"{author}:")
-        
+        # ユーザー名をDiscordと同じ青色で描画
+        c.setFillColorRGB(114/255, 137/255, 218/255)  # Discordのユーザー名青色
         # メッセージ内容を白色で描画
         c.setFillColorRGB(1, 1, 1)
-        author_text_width = pdfmetrics.stringWidth(f"{author}: ", "jp_font", 12)
-        # 1行に描画可能な最大文字数を計算（横幅に合わせて自動改行）
+        # 作者名の後にスペースを入れてDiscordの表示に近づける
+        author_text = f"{author}: "
+        author_text_width = pdfmetrics.stringWidth(author_text, "jp_font", 11)
+        c.drawString(margin, current_y, author_text)
+        # 1行に描画可能な最大文字数を計算（横幅に合わせて自動改行、Discordの折り返しに合わせる）
         available_width_first_line = width - margin - author_text_width
         available_width = width - margin * 2
         
@@ -159,6 +163,7 @@ def create_chat_pdf(messages, channel_name):
         c.rect(0, 0, width, height, fill=True, stroke=False)
         current_y = height - margin
     c.setFillColorRGB(185/255, 187/255, 190/255)  # 薄い灰色
+    c.setFont("jp_font", 10)
     c.drawString(margin, current_y, f"全{len(messages)}件のメッセージ / {page_num}ページ")
     
     # PDFを保存
@@ -245,6 +250,14 @@ async def archive_text_channel_history(channel, bot):
             img_discord_file = discord.File(img_file, filename=f"{channel.name}_archive.png")
             files.append(img_discord_file)
         print("discord.File作成完了、送信開始")
+        # アーカイブチャンネルの権限を確認し、サーバーオーナー以外が閲覧できないように設定
+        if archive_channel.guild.owner:
+            # デフォルトロール（全員）の閲覧権限をOFFに
+            await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False)
+            # サーバーオーナーだけ閲覧権限をONに
+            await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True)
+            print(f"アーカイブチャンネルの権限を設定: サーバーオーナー({archive_channel.guild.owner.display_name})のみ閲覧可能")
+        
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", files=files)
         print(f"{channel.name} のアーカイブが完了しました。全{len(messages)}件のメッセージを保存しました。")
     except Exception as e:
