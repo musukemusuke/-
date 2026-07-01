@@ -226,6 +226,14 @@ def setup_voice_events(bot):
                 after_normalized = normalize_channel_name(after.name)
                 new_name = f"聞き専用-{after_normalized}"
                 await old_listen_channel.edit(name=new_name)
+                # 名前変更時にボイスチャンネルのIDが変わっている場合、マップの紐付けを更新（Discordの一時的ボイスチャンネル対策）
+                # 古いIDのマッピングが存在する場合は削除し、新しいIDに再紐付け
+                if before.id in voice_to_text_channel_map:
+                    del voice_to_text_channel_map[before.id]
+                    print(f"古いボイスチャンネルID{before.id}のマッピングを削除しました")
+                # 新しいボイスチャンネルIDにテキストチャンネルIDを紐付け
+                voice_to_text_channel_map[after.id] = old_listen_channel.id
+                print(f"新しいボイスチャンネルID{after.id}にテキストチャンネル{old_listen_channel.name}({old_listen_channel.id})を紐付けました")
                 print(f"ボイスチャンネル {before.name} ({before_normalized}) が{after.name} ({after_normalized})に名前変更されたので、テキストチャンネルを{new_name}に変更しました。")
                 # チャンネルのトピックやメッセージも更新（必要に応じて）
                 await old_listen_channel.send(f"🔄 ボイスチャンネルの名前が{after.mention}に変更されたので、このテキストチャンネルの名前も{new_name}に更新しました！")
