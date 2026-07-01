@@ -1,5 +1,6 @@
 import os
 import io
+import unicodedata
 import discord
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -71,8 +72,12 @@ def create_chat_pdf(messages, channel_name):
     # メッセージを1件ずつ描画
     c.setFont("jp_font", 12)
     for idx, message in enumerate(messages):
+        # 特殊文字を可能な限り通常の文字に変換（おしゃれフォント対策）
         author = message.author.display_name
+        # 特殊な太文字・斜体文字をASCIIに変換する簡易的な処理（NFKC正規化）
+        author = unicodedata.normalize('NFKC', author)
         content = message.content if message.content else "(添付ファイル等)"
+        content = unicodedata.normalize('NFKC', content)
         
         # ページの下まで来たら新しいページを作成
         if current_y < margin + line_height:
