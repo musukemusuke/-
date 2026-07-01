@@ -135,12 +135,16 @@ def setup_voice_events(bot):
                 category = before.channel.category
                 before_channel_normalized = normalize_channel_name(before.channel.name)
                 listen_channel = None
-                for channel in category.text_channels:
-                    if channel.name.startswith("聞き専用-"):
-                        channel_suffix = channel.name[len("聞き専用-"):]
-                        if channel_suffix == before_channel_normalized:
-                            listen_channel = channel
-                            break
+                # まずdiscord.utils.getで直接検索を試みる
+                listen_channel = discord.utils.get(category.text_channels, name=f"聞き専用-{before_channel_normalized}")
+                # 見つからなければループで検索
+                if not listen_channel:
+                    for channel in category.text_channels:
+                        if channel.name.startswith("聞き専用-"):
+                            channel_suffix = channel.name[len("聞き専用-"):]
+                            if channel_suffix == before_channel_normalized:
+                                listen_channel = channel
+                                break
                 # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
                 if listen_channel is not None and not member.bot:
                     # メンバーの個人ロールを取得
@@ -179,15 +183,25 @@ def setup_voice_events(bot):
             all_listen_channels = [c.name for c in category.text_channels if c.name.startswith("聞き専用-")]
             print(f"現在のカテゴリ内の聞き専用チャンネル一覧: {all_listen_channels}")
             
-            old_listen_channel = None
-            for channel in category.text_channels:
-                if channel.name.startswith("聞き専用-"):
-                    # テキストチャンネル名の末尾部分を抽出して正規化後の名前と比較
-                    channel_suffix = channel.name[len("聞き専用-"):]
-                    print(f"チェック中: {channel.name} (suffix: {channel_suffix}) vs 検索条件: {before_normalized}")
-                    if channel_suffix == before_normalized or channel_suffix == before.name.lower():
+            # まずdiscord.utils.getで完全一致検索を最初に試行（最も確実）
+            old_listen_channel = discord.utils.get(category.text_channels, name=f"聞き専用-{before_normalized}")
+            # 見つからなければループで全ての可能性を検索
+            if not old_listen_channel:
+                for channel in category.text_channels:
+                    if channel.name.startswith("聞き専用-"):
+                        # テキストチャンネル名の末尾部分を抽出して正規化後の名前と比較
+                        channel_suffix = channel.name[len("聞き専用-"):]
+                        print(f"チェック中: {channel.name} (suffix: {channel_suffix}) vs 検索条件: {before_normalized}")
+                        if channel_suffix == before_normalized or channel_suffix == before.name.lower() or before_normalized in channel_suffix:
+                            old_listen_channel = channel
+                            print(f"一致する古いチャンネルを発見(ループ検索): {old_listen_channel.name}")
+                            break
+            # それでも見つからなければ、チャンネル名の前方一致で検索
+            if not old_listen_channel:
+                for channel in category.text_channels:
+                    if channel.name.startswith(f"聞き専用-{before_normalized[:10]}"):
                         old_listen_channel = channel
-                        print(f"一致する古いチャンネルを発見: {old_listen_channel.name}")
+                        print(f"前方一致で古いチャンネルを発見: {old_listen_channel.name}")
                         break
             if old_listen_channel is None:
                 print(f"警告: 古い名前に一致するテキストチャンネルが見つかりませんでした。新規作成します。")
@@ -223,14 +237,26 @@ def setup_voice_events(bot):
             if category is None:
                 return
             deleted_channel_normalized = normalize_channel_name(channel.name)
-            for text_channel in category.text_channels:
-                if text_channel.name.startswith("聞き専用-"):
-                    channel_suffix = text_channel.name[len("聞き専用-"):]
-                    if channel_suffix == deleted_channel_normalized:
-                         try:
-                             # 削除前に履歴をアーカイブ
-                             await archive_text_channel_history(text_channel, bot)
-                             await text_channel.delete()
-                             print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
-                         except discord.errors.NotFound:
-                             print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
+            # まずdiscord.utils.getで直接検索を試みる
+            text_channel = discord.utils.get(category.text_channels, name=f"聞き専用-{deleted_channel_normalized}")
+            if text_channel:
+                try:
+                    # 削除前に履歴をアーカイブ
+                    await archive_text_channel_history(text_channel, bot)
+                    await text_channel.delete()
+                    print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
+                except discord.errors.NotFound:
+                    print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
+            else:
+                # 直接検索で見つからなければループで検索
+                for c in category.text_channels:
+                    if c.name.startswith("聞き専用-"):
+                        channel_suffix = c.name[len("聞き専用-"):]
+                        if channel_suffix == deleted_channel_normalized:
+                             try:
+                                 # 削除前に履歴をアーカイブ
+                                 await archive_text_channel_history(c, bot)
+                                 await c.delete()
+                                 print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {c.name} も削除しました。")
+                             except discord.errors.NotFound:
+                                 print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
