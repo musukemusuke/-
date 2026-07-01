@@ -309,4 +309,16 @@ def setup_voice_events(bot):
                                  except discord.errors.NotFound:
                                      print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
                              else:
-                                 print(f"テキストチャンネル{c.name}は既にアーカイブ処理済みのため、重複処理をスキップしました。")
+                                     print(f"テキストチャンネル{c.name}は既にアーカイブ処理済みのため、重複処理をスキップしました。")
+
+    # 新規メンバーがサーバーに参加したときのイベント
+    @bot.event
+    async def on_member_join(member):
+        print(f"新規メンバー {member.display_name} がサーバーに参加しました。全ての聞き専チャンネルの権限を確認します。")
+        # 参加したサーバー内の全てのテキストチャンネルを検索
+        for channel in member.guild.text_channels:
+            # 聞き専用チャンネルのみ処理
+            if channel.name.startswith("聞き専用-"):
+                # 新規メンバーの権限を確実にオフに設定
+                await channel.set_permissions(member, read_messages=False, send_messages=False)
+                print(f"新規メンバー {member.display_name} の {channel.name} の権限をオフに設定しました。")
