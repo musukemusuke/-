@@ -87,7 +87,7 @@ def setup_voice_events(bot):
             # まだ存在しなければテキストチャンネルとして作成
             if listen_channel is None:
                 # サーバーのデフォルトロールを取得
-                guild = after.channel.guild
+                guild = after.guild
                 # デフォルトは閲覧も送信も不可、ボイスチャンネルに入っているメンバーだけが利用可能
                 permissions = {
                     guild.default_role: discord.PermissionOverwrite(
@@ -228,7 +228,7 @@ def setup_voice_events(bot):
             new_listen_channel = discord.utils.get(category.text_channels, name=f"聞き専用-{after_normalized}")
             if not new_listen_channel:
                 # サーバーのデフォルトロールを取得
-                guild = after.channel.guild
+                guild = after.guild
                 # デフォルトは閲覧も送信も不可、ボイスチャンネルに入っているメンバーだけが利用可能
                 permissions = {
                     guild.default_role: discord.PermissionOverwrite(
@@ -238,7 +238,7 @@ def setup_voice_events(bot):
                     )
                 }
                 # 現在ボイスチャンネルにいるメンバー全員の個人ロールに送信権限を付与
-                for voice_member in after.channel.members:
+                for voice_member in after.members:
                     if voice_member.bot:
                         continue
                     voice_member_role = None
