@@ -169,15 +169,24 @@ def setup_voice_events(bot):
             # 元の名前の聞き専用テキストチャンネルを探す（Discordのチャンネル名仕様に合わせて正規化）
             category = after.category
             before_normalized = normalize_channel_name(before.name)
+            print(f"ボイスチャンネル名前変更検知: {before.name}→{after.name} (正規化前後: {before_normalized}→{normalize_channel_name(after.name)})")
+            # カテゴリ内の全聞き専用チャンネルをログ出力（デバッグ用）
+            all_listen_channels = [c.name for c in category.text_channels if c.name.startswith("聞き専用-")]
+            print(f"現在のカテゴリ内の聞き専用チャンネル一覧: {all_listen_channels}")
+            
             old_listen_channel = None
             for channel in category.text_channels:
                 if channel.name.startswith("聞き専用-"):
                     # テキストチャンネル名の末尾部分を抽出して正規化後の名前と比較
                     channel_suffix = channel.name[len("聞き専用-"):]
+                    print(f"チェック中: {channel.name} (suffix: {channel_suffix}) vs 検索条件: {before_normalized}")
                     if channel_suffix == before_normalized or channel_suffix == before.name.lower():
                         old_listen_channel = channel
+                        print(f"一致する古いチャンネルを発見: {old_listen_channel.name}")
                         break
-            # 古いテキストチャンネルが存在する場合、新しい名前に変更
+            if old_listen_channel is None:
+                print(f"警告: 古い名前に一致するテキストチャンネルが見つかりませんでした。新規作成します。")
+            # 古いテキストチャンネルが存在する場合、新しい名前に変更（重複作成防止）
             if old_listen_channel is not None:
                 after_normalized = normalize_channel_name(after.name)
                 new_name = f"聞き専用-{after_normalized}"
@@ -185,6 +194,27 @@ def setup_voice_events(bot):
                 print(f"ボイスチャンネル {before.name} ({before_normalized}) が{after.name} ({after_normalized})に名前変更されたので、テキストチャンネルを{new_name}に変更しました。")
                 # チャンネルのトピックやメッセージも更新（必要に応じて）
                 await old_listen_channel.send(f"🔄 ボイスチャンネルの名前が{after.mention}に変更されたので、このテキストチャンネルの名前も{new_name}に更新しました！")
+            else:
+                # 古いチャンネルが見つからなかった場合だけ、新規作成（重複回避）
+                category = after.category
+                after_normalized = normalize_channel_name(after.name)
+                new_name = f"聞き専用-{after_normalized}"
+                # 権限設定は元のボイスチャンネルと同じに
+                permissions = {
+                    after.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                    after.guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+                }
+                # 現在ボイスチャンネルに接続しているメンバー全員に権限を付与
+                for member in after.members:
+                    if not member.bot:
+                        permissions[member] = discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True)
+                new_listen_channel = await category.create_text_channel(
+                    name=new_name,
+                    overwrites=permissions,
+                    reason=f"ボイスチャンネル名前変更に伴い新規テキストチャンネルを作成"
+                )
+                await new_listen_channel.send(f"✨ ボイスチャンネル{after.mention}の聞き専用テキストチャンネルを新規作成しました！")
+                print(f"古いテキストチャンネルが見つからなかったため、新規に{new_name}を作成しました。")
 
     # サーバーのチャンネルが削除されたときのイベント
     @bot.event

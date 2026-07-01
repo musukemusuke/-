@@ -97,23 +97,57 @@ def create_chat_pdf(messages, channel_name):
         # メッセージ内容を白色で描画
         c.setFillColorRGB(1, 1, 1)
         author_text_width = pdfmetrics.stringWidth(f"{author}: ", "jp_font", 12)
-        # 長いメッセージは改行して描画
-        content_lines = content.split('\n')
-        first_line = content_lines[0]
-        c.drawString(margin + author_text_width, current_y, first_line)
-        # 2行目以降を描画
-        for line in content_lines[1:]:
-            current_y -= line_height
-            if current_y < margin:
-                # ページをめくる
-                c.showPage()
-                page_num += 1
-                c.setFillColorRGB(54/255, 57/255, 63/255)
-                c.rect(0, 0, width, height, fill=True, stroke=False)
-                c.setFillColorRGB(1, 1, 1)
-                c.setFont("jp_font", 12)
-                current_y = height - margin
-            c.drawString(margin, current_y, line)
+        # 1行に描画可能な最大文字数を計算（横幅に合わせて自動改行）
+        available_width_first_line = width - margin - author_text_width
+        available_width = width - margin * 2
+        
+        # テキストを自動的に改行する関数
+        def wrap_text(text, max_width, font_name, font_size):
+            words = list(text)  # 日本語は1文字ずつ処理
+            lines = []
+            current_line = ""
+            for char in words:
+                test_line = current_line + char
+                if pdfmetrics.stringWidth(test_line, font_name, font_size) <= max_width:
+                    current_line = test_line
+                else:
+                    lines.append(current_line)
+                    current_line = char
+            if current_line:
+                lines.append(current_line)
+            return lines
+        
+        # 元の改行で分割しつつ、長い行は自動改行
+        raw_lines = content.split('\n')
+        all_content_lines = []
+        for line in raw_lines:
+            if not line:
+                all_content_lines.append("")
+                continue
+            # 1行目は作者名の後ろから描画するので幅が狭い
+            if not all_content_lines:
+                wrapped = wrap_text(line, available_width_first_line, "jp_font", 12)
+            else:
+                wrapped = wrap_text(line, available_width, "jp_font", 12)
+            all_content_lines.extend(wrapped)
+        
+        # 最初の行を作者名の横に描画
+        if all_content_lines:
+            first_content_line = all_content_lines[0]
+            c.drawString(margin + author_text_width, current_y, first_content_line)
+            # 残りの行を下に描画
+            for line in all_content_lines[1:]:
+                current_y -= line_height
+                if current_y < margin:
+                    # ページをめくる
+                    c.showPage()
+                    page_num += 1
+                    c.setFillColorRGB(54/255, 57/255, 63/255)
+                    c.rect(0, 0, width, height, fill=True, stroke=False)
+                    c.setFillColorRGB(1, 1, 1)
+                    c.setFont("jp_font", 12)
+                    current_y = height - margin
+                c.drawString(margin, current_y, line)
         
         current_y -= line_height
     
