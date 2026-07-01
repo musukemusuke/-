@@ -1,3 +1,4 @@
+import re
 import discord
 from archive import archive_text_channel_history
 
@@ -5,6 +6,14 @@ from archive import archive_text_channel_history
 IGNORE_VOICE_CHANNEL_IDS = [
     # 休止ボイスチャンネルのIDをここに記載
 ]
+
+# Discordのチャンネル名は小文字・ハイフン区切りに自動変換されるので、同じように正規化する共通関数
+def normalize_channel_name(name):
+    # 日本語はそのまま、英数字以外をハイフンに置換して小文字化
+    normalized = re.sub(r'[^a-zA-Z0-9\u3040-\u30ff\u4e00-\u9fff]+', '-', name).lower()
+    # 連続するハイフンを単一に、先頭末尾のハイフンを削除
+    normalized = re.sub(r'-+', '-', normalized).strip('-')
+    return normalized
 
 def setup_voice_events(bot):
     # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
@@ -49,12 +58,15 @@ def setup_voice_events(bot):
                 return
             # 現在のボイスチャンネルの親カテゴリーを取得
             category = after.channel.category
+            current_channel_normalized = normalize_channel_name(after.channel.name)
             # 対象の聞き専用テキストチャンネルを探す
             listen_channel = None
             for channel in category.text_channels:
-                if channel.name.startswith("聞き専用-") and channel.name.endswith(after.channel.name):
-                    listen_channel = channel
-                    break
+                if channel.name.startswith("聞き専用-"):
+                    channel_suffix = channel.name[len("聞き専用-"):]
+                    if channel_suffix == current_channel_normalized:
+                        listen_channel = channel
+                        break
             
             # まだ存在しなければテキストチャンネルとして作成
             if listen_channel is None:
@@ -87,7 +99,7 @@ def setup_voice_events(bot):
                             read_message_history=True
                         )
                 listen_channel = await category.create_text_channel(
-                    name=f"聞き専用-{after.channel.name}",
+                    name=f"聞き専用-{current_channel_normalized}",
                     overwrites=permissions,
                     reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用テキストチャンネルを作成"
                 )
@@ -114,13 +126,16 @@ def setup_voice_events(bot):
             # 元のチャンネルにbot以外のメンバーがまだ残っているか確認
             remaining_humans = [m for m in before.channel.members if not m.bot]
             if len(remaining_humans) > 0:
-                # まだ人間が残っているので、退出したメンバーの権限だけ削除
-                category = before.channel.category
-                listen_channel = None
-                for channel in category.text_channels:
-                    if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
-                        listen_channel = channel
-                        break
+                # 退出したボイスチャンネルに紐づく聞き専用テキストチャンネルを探す
+                    category = before.channel.category
+                    before_channel_normalized = normalize_channel_name(before.channel.name)
+                    listen_channel = None
+                    for channel in category.text_channels:
+                        if channel.name.startswith("聞き専用-"):
+                            channel_suffix = channel.name[len("聞き専用-"):]
+                            if channel_suffix == before_channel_normalized:
+                                listen_channel = channel
+                                break
                 # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
                 if listen_channel is not None and not member.bot:
                     # メンバーの個人ロールを取得
@@ -151,18 +166,23 @@ def setup_voice_events(bot):
             # 休止チャンネルや「個室を作る」チャンネルは処理しない
             if "休止" in after.name or "個室を作る" in after.name:
                 return
-            # 元の名前の聞き専用テキストチャンネルを探す
+            # 元の名前の聞き専用テキストチャンネルを探す（Discordのチャンネル名仕様に合わせて正規化）
             category = after.category
+            before_normalized = normalize_channel_name(before.name)
             old_listen_channel = None
             for channel in category.text_channels:
-                if channel.name.startswith("聞き専用-") and channel.name.endswith(before.name):
-                    old_listen_channel = channel
-                    break
+                if channel.name.startswith("聞き専用-"):
+                    # テキストチャンネル名の末尾部分を抽出して正規化後の名前と比較
+                    channel_suffix = channel.name[len("聞き専用-"):]
+                    if channel_suffix == before_normalized or channel_suffix == before.name.lower():
+                        old_listen_channel = channel
+                        break
             # 古いテキストチャンネルが存在する場合、新しい名前に変更
             if old_listen_channel is not None:
-                new_name = f"聞き専用-{after.name}"
+                after_normalized = normalize_channel_name(after.name)
+                new_name = f"聞き専用-{after_normalized}"
                 await old_listen_channel.edit(name=new_name)
-                print(f"ボイスチャンネル {before.name} が{after.name}に名前変更されたので、テキストチャンネルを{new_name}に変更しました。")
+                print(f"ボイスチャンネル {before.name} ({before_normalized}) が{after.name} ({after_normalized})に名前変更されたので、テキストチャンネルを{new_name}に変更しました。")
                 # チャンネルのトピックやメッセージも更新（必要に応じて）
                 await old_listen_channel.send(f"🔄 ボイスチャンネルの名前が{after.mention}に変更されたので、このテキストチャンネルの名前も{new_name}に更新しました！")
 
@@ -178,9 +198,12 @@ def setup_voice_events(bot):
             category = channel.category
             if category is None:
                 return
+            deleted_channel_normalized = normalize_channel_name(channel.name)
             for text_channel in category.text_channels:
-                if text_channel.name.startswith("聞き専用-") and text_channel.name.endswith(channel.name):
-                    # 削除前に履歴をアーカイブ
-                    await archive_text_channel_history(text_channel, bot)
-                    await text_channel.delete()
-                    print(f"ボイスチャンネル {channel.name} が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
+                if text_channel.name.startswith("聞き専用-"):
+                    channel_suffix = text_channel.name[len("聞き専用-"):]
+                    if channel_suffix == deleted_channel_normalized:
+                        # 削除前に履歴をアーカイブ
+                        await archive_text_channel_history(text_channel, bot)
+                        await text_channel.delete()
+                        print(f"ボイスチャンネル {channel.name} ({deleted_channel_normalized}) が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
