@@ -36,15 +36,9 @@ def setup_voice_events(bot):
                     before_listen_channel = channel
                     break
             if before_listen_channel is not None and not member.bot:
-                # 移動元メンバーの個人ロールを取得して権限を削除
-                member_role = None
-                for role in member.roles:
-                    if role.name == member.display_name:
-                        member_role = role
-                        break
-                if member_role is not None:
-                    await before_listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
-                    print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を削除しました。")
+                # 個人ロールではなく、メンバー個別に権限を削除
+                await before_listen_channel.set_permissions(member, send_messages=False, read_messages=False, read_message_history=False)
+                print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を削除しました。")
             
             # 移動後、移動元のチャンネルにbot以外のメンバーが残っているか確認
             before_human_members = [m for m in before.channel.members if not m.bot]
@@ -110,13 +104,12 @@ def setup_voice_events(bot):
                         if role.name == voice_member.display_name:
                             voice_member_role = role
                             break
-                    # 個人ロールが見つかったら権限を設定
-                    if voice_member_role is not None:
-                        permissions[voice_member_role] = discord.PermissionOverwrite(
-                            send_messages=True,
-                            read_messages=True,
-                            read_message_history=True
-                        )
+                    # 個人ロールではなく、メンバー個別に権限を設定
+                    permissions[voice_member] = discord.PermissionOverwrite(
+                        send_messages=True,
+                        read_messages=True,
+                        read_message_history=True
+                    )
                 listen_channel = await category.create_text_channel(
                     name=f"聞き専用-{current_channel_normalized}",
                     overwrites=permissions,
@@ -145,16 +138,9 @@ def setup_voice_events(bot):
                 # Botは個人ロールを持っていないのでスキップ
                 if member.bot:
                     return
-                # メンバーの個人ロールを取得
-                member_role = None
-                for role in member.roles:
-                    if role.name == member.display_name:
-                        member_role = role
-                        break
-                # 個人ロールに送信権限を付与
-                if member_role is not None:
-                    await listen_channel.set_permissions(member_role, send_messages=True, read_messages=True, read_message_history=True)
-                    print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、個人ロール {member_role.name} にテキストチャンネルの権限を付与しました。")
+                # 個人ロールではなく、メンバー個別に権限を付与
+                await listen_channel.set_permissions(member, send_messages=True, read_messages=True, read_message_history=True)
+                print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、テキストチャンネルの権限を付与しました。")
         
         # ボイスチャンネルから完全に退出した場合
         if after.channel is None and before.channel is not None:
@@ -260,21 +246,16 @@ def setup_voice_events(bot):
                         read_message_history=False
                     )
                 }
-                # 現在ボイスチャンネルにいるメンバー全員の個人ロールに送信権限を付与
+                # 現在ボイスチャンネルにいるメンバー全員個別に送信権限を付与
                 for voice_member in after.members:
                     if voice_member.bot:
                         continue
-                    voice_member_role = None
-                    for role in voice_member.roles:
-                        if role.name == voice_member.display_name:
-                            voice_member_role = role
-                            break
-                    if voice_member_role is not None:
-                        permissions[voice_member_role] = discord.PermissionOverwrite(
-                            send_messages=True,
-                            read_messages=True,
-                            read_message_history=True
-                        )
+                    # 個人ロールではなく、メンバー個別に権限を設定
+                    permissions[voice_member] = discord.PermissionOverwrite(
+                        send_messages=True,
+                        read_messages=True,
+                        read_message_history=True
+                    )
                 # 新規テキストチャンネルを作成
                 new_listen_channel = await category.create_text_channel(
                     name=f"聞き専用-{after_normalized}",
