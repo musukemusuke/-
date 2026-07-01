@@ -17,6 +17,11 @@ read_only_channel_ids = [
     1520972406234153081,  # # 守ってほしい事
     1520972441151733911   # # お知らせ
 ]
+# プライベートスレッド作成を許可するチャンネルID（愚痴チャンネルと独り言チャンネルの2つを追加）
+PRIVATE_THREAD_ALLOWED_CHANNEL_IDS = [
+    1519537043921834094,  # #独り言チャンネル
+    1519537065992126485   # #愚痴チャンネル
+]
 
 @bot.event
 async def on_ready():
@@ -197,6 +202,48 @@ async def on_member_update(before, after):
             else:
                 await channel.set_permissions(new_role, view_channel=True, send_messages=True)
                 print(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
+
+@bot.event
+async def on_message(message):
+    # Botのメッセージは無視
+    if message.author.bot:
+        return
+    
+    # 愚痴・独り言チャンネルの場合の処理
+    if message.channel.id in PRIVATE_THREAD_ALLOWED_CHANNEL_IDS:
+        # 「プライベートスレッド」以外のメッセージは自動的に削除
+        if "プライベートスレッド" not in message.content:
+            await message.delete()
+            return
+        
+        # 「プライベートスレッド」が含まれていたらスレッドを作成
+        member = message.author
+        # どのチャンネルで作成されたかでスレッド名を変える
+        if message.channel.id == 1519537065992126485:  # 愚痴チャンネル
+            thread_name = f"{member.display_name}の愚痴"
+        else:  # 独り言チャンネル
+            thread_name = f"{member.display_name}の独り言"
+        
+        # プライベートスレッドを作成
+        thread = await message.channel.create_thread(
+            name=thread_name,
+            auto_archive_duration=1440,  # 1日間メッセージがなければアーカイブ
+            type=discord.ChannelType.private_thread
+        )
+        # スレッドにコマンド実行者を追加
+        await thread.add_user(member)
+        # コマンドメッセージ自体も削除してチャンネルをきれいに保つ
+        await message.delete()
+        await message.channel.send(f"{member.mention} のプライベートスレッド {thread.mention} を作成しました！")
+        print(f"メンバー {member.display_name} のプライベートスレッドを作成しました。")
+        return
+    
+    # それ以外のチャンネルで「プライベートスレッド」が送られた場合の処理
+    if "プライベートスレッド" in message.content:
+        await message.channel.send(f"{message.author.mention} プライベートスレッドは愚痴・独り言チャンネルでのみ作成できます。")
+    
+    # 通常のコマンドも処理できるようにする
+    await bot.process_commands(message)
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
