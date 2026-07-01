@@ -254,9 +254,9 @@ async def archive_text_channel_history(channel, bot):
         # 全サーバーメンバーがアーカイブを見返せるように権限を設定（会話の履歴を共有）
         # Discordの自動権限同期を完全に無効化し、手動で純粋な権限状態を作る
         await archive_channel.edit(sync_permissions=False)
-        # 全ての既存の権限上書きを完全に削除（最新discord.pyバージョンの正しい権限削除方法）
+        # 全ての既存の権限上書きをリセット（実行環境のdiscord.pyバージョンに合わせた方法）
         for target, overwrite in list(archive_channel.overwrites.items()):
-            await archive_channel.set_permissions(target, None)
+            await archive_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
         # 必要な権限だけを設定：デフォルトロールは閲覧のみ、Botは全権限
         await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=True, send_messages=False, read_message_history=True)
         await archive_channel.set_permissions(bot.user, read_messages=True, send_messages=True)
@@ -266,8 +266,8 @@ async def archive_text_channel_history(channel, bot):
         # サーバー側の自動同期で発生する余分な権限上書きを完全に消去する最終処理
         await asyncio.sleep(3)
         for target, overwrite in list(archive_channel.overwrites.items()):
-            if target != archive_channel.guild.default_role and target != bot.user:
-                await archive_channel.set_permissions(target, None)
+            if not isinstance(target, discord.Member) and target != archive_channel.guild.default_role and target != archive_channel.guild.owner and target != bot.user:
+                await archive_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
         print(f"{channel.name} のアーカイブが完全に完了しました。全{len(messages)}件のメッセージを保存し、全ての余分な権限上書きを削除しました。")
     except Exception as e:
         print(f"PDF生成中にエラーが発生しました: {e}")
