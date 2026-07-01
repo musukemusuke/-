@@ -12,6 +12,12 @@ intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# 読み取り専用にするチャンネルIDを定義（グローバルで統一管理）
+read_only_channel_ids = [
+    1520972406234153081,  # # 守ってほしい事
+    1520972441151733911   # # お知らせ
+]
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
@@ -56,15 +62,15 @@ async def on_member_join(member):
     )
     await member.add_roles(new_role)
 
-    read_only_channel_ids = [
-        1520972406234153081,  # # 守ってほしい事
-        1520972441151733911   # # お知らせ
-    ]
-    for channel_id in read_only_channel_ids:
-        channel = guild.get_channel(channel_id)
-        if channel:
-            await channel.set_permissions(new_role, send_messages=False)
-            print(f"チャンネル {channel.name} で {new_role.name} のメッセージ送信権限を無効にしました。")
+    # すべてのチャンネルで閲覧権限を確実に有効化
+     for channel in guild.channels:
+         if channel.id in read_only_channel_ids:
+             # 読み取り専用チャンネルは閲覧可、送信不可
+             await channel.set_permissions(new_role, view_channel=True, send_messages=False)
+         else:
+             # 通常チャンネルは閲覧も送信も可
+             await channel.set_permissions(new_role, view_channel=True, send_messages=True)
+         print(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
 
 @bot.event
 async def on_member_remove(member):
@@ -132,16 +138,14 @@ async def on_member_update(before, after):
         await member.add_roles(new_role)
         print(f"メンバー {new_role_name} の新しい個人ロール {new_role_name} を作成しました。")
 
-        # 読み取り専用チャンネルの権限も再設定
-        read_only_channel_ids = [
-            1520972406234153081,  # # 守ってほしい事
-            1520972441151733911   # # お知らせ
-        ]
-        for channel_id in read_only_channel_ids:
-            channel = guild.get_channel(channel_id)
-            if channel:
-                await channel.set_permissions(new_role, send_messages=False)
-                print(f"チャンネル {channel.name} で {new_role.name} のメッセージ送信権限を無効にしました。")
+        # まずすべてのチャンネルで閲覧権限を確実に有効化
+        for channel in guild.channels:
+            # 読み取り専用以外のチャンネルは通常権限、読み取り専用は送信不可
+            if channel.id in read_only_channel_ids:
+                await channel.set_permissions(new_role, view_channel=True, send_messages=False)
+            else:
+                await channel.set_permissions(new_role, view_channel=True, send_messages=True)
+                print(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
