@@ -247,8 +247,35 @@ async def on_message(message):
 # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
 @bot.event
 async def on_voice_state_update(member, before, after):
-    # 新しくボイスチャンネルに参加した場合
-    if before.channel is None and after.channel is not None:
+    # 休止チャンネルでは聞き専用チャンネルを作成しない
+    IGNORE_VOICE_CHANNEL_IDS = [
+        # 休止ボイスチャンネルのIDをここに記載
+    ]
+    # ボイスチャンネル間を移動した場合（前のチャンネルも後のチャンネルも存在する）
+    if before.channel is not None and after.channel is not None and before.channel.id != after.channel.id:
+        # 移動元のチャンネルの聞き専用テキストチャンネルの権限を削除
+        before_category = before.channel.category
+        before_listen_channel = None
+        for channel in before_category.text_channels:
+            if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                before_listen_channel = channel
+                break
+        if before_listen_channel is not None and not member.bot:
+            # 移動元メンバーの個人ロールを取得して権限を削除
+            member_role = None
+            for role in member.roles:
+                if role.name == member.display_name:
+                    member_role = role
+                    break
+            if member_role is not None:
+                await before_listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
+                print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を削除しました。")
+    
+    # 新しくボイスチャンネルに参加した場合、または別チャンネルから移動してきた場合
+    if after.channel is not None:
+        # 休止チャンネルなら処理をスキップ
+        if after.channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in after.channel.name:
+            return
         # 現在のボイスチャンネルの親カテゴリーを取得
         category = after.channel.category
         # 対象の聞き専用テキストチャンネルを探す
@@ -272,6 +299,9 @@ async def on_voice_state_update(member, before, after):
             }
             # 現在ボイスチャンネルにいるメンバー全員の個人ロールに送信権限を付与
             for voice_member in after.channel.members:
+                # Botは個人ロールを持っていないのでスキップ
+                if voice_member.bot:
+                    continue
                 # メンバーの個人ロールを探す
                 voice_member_role = None
                 for role in voice_member.roles:
@@ -294,6 +324,9 @@ async def on_voice_state_update(member, before, after):
             await listen_channel.send(f"📢 こちらは{after.channel.mention}の聞き専用テキストチャンネルです。チャンネル内の会話を聞きながら、テキストでコメントしたい方はこちらで交流できます！")
             print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。")
         else:
+            # Botは個人ロールを持っていないのでスキップ
+            if member.bot:
+                return
             # メンバーの個人ロールを取得
             member_role = None
             for role in member.roles:
@@ -318,6 +351,9 @@ async def on_voice_state_update(member, before, after):
                     break
             # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
             if listen_channel is not None:
+                # Botは個人ロールを持っていないのでスキップ
+                if member.bot:
+                    return
                 # メンバーの個人ロールを取得
                 member_role = None
                 for role in member.roles:
