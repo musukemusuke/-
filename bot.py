@@ -270,11 +270,20 @@ async def on_voice_state_update(member, before, after):
             if member_role is not None:
                 await before_listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
                 print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を削除しました。")
+        
+        # 移動後、移動元のチャンネルにbot以外のメンバーが残っているか確認
+        before_human_members = [m for m in before.channel.members if not m.bot]
+        if len(before_human_members) == 0:
+            # 人間が誰もいなくなったら移動元の聞き専用テキストチャンネルを削除
+            for channel in before_category.text_channels:
+                if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    await channel.delete()
+                    print(f"移動によりチャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
     
     # 新しくボイスチャンネルに参加した場合、または別チャンネルから移動してきた場合
     if after.channel is not None:
-        # 休止チャンネルなら処理をスキップ
-        if after.channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in after.channel.name:
+        # 休止チャンネルや「個室を作る」チャンネルでは処理をスキップ
+        if after.channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in after.channel.name or "個室を作る" in after.channel.name:
             return
         # 現在のボイスチャンネルの親カテゴリーを取得
         category = after.channel.category
@@ -338,11 +347,12 @@ async def on_voice_state_update(member, before, after):
                 await listen_channel.set_permissions(member_role, send_messages=True, read_messages=True, read_message_history=True)
                 print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、個人ロール {member_role.name} にテキストチャンネルの権限を付与しました。")
     
-    # ボイスチャンネルから退出した場合
+    # ボイスチャンネルから完全に退出した場合
     if after.channel is None and before.channel is not None:
-        # 元のチャンネルにまだ誰かいるか確認
-        if len(before.channel.members) > 0:
-            # 対象の聞き専用テキストチャンネルを探す
+        # 元のチャンネルにbot以外のメンバーがまだ残っているか確認
+        remaining_humans = [m for m in before.channel.members if not m.bot]
+        if len(remaining_humans) > 0:
+            # まだ人間が残っているので、退出したメンバーの権限だけ削除
             category = before.channel.category
             listen_channel = None
             for channel in category.text_channels:
@@ -350,10 +360,7 @@ async def on_voice_state_update(member, before, after):
                     listen_channel = channel
                     break
             # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
-            if listen_channel is not None:
-                # Botは個人ロールを持っていないのでスキップ
-                if member.bot:
-                    return
+            if listen_channel is not None and not member.bot:
                 # メンバーの個人ロールを取得
                 member_role = None
                 for role in member.roles:
@@ -365,12 +372,12 @@ async def on_voice_state_update(member, before, after):
                     await listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
                     print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、個人ロール {member_role.name} のテキストチャンネル権限を削除しました。")
         else:
-            # 誰もいなくなったら聞き専用テキストチャンネルを削除
+            # 人間のメンバーが誰もいなくなったので聞き専用テキストチャンネルを削除
             category = before.channel.category
             for channel in category.text_channels:
                 if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
                     await channel.delete()
-                    print(f"チャンネル {before.channel.name} が無人になったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
+                    print(f"チャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
