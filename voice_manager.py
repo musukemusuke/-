@@ -51,7 +51,7 @@ def setup_voice_events(bot):
                 await asyncio.sleep(1)
                 for target, overwrite in list(before_listen_channel.overwrites.items()):
                     if not isinstance(target, discord.Member) and target != before.channel.guild.default_role and target != before.channel.guild.owner and target != bot.user:
-                        await before_listen_channel.set_permissions(target, None)
+                        await before_listen_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
                 print(f"メンバー {member.display_name} が{before.channel.name}から移動したので、元のテキストチャンネルの権限を完全に削除しました。")
             
             # 移動後、移動元のチャンネルにbot以外のメンバーが残っているか確認
@@ -135,11 +135,11 @@ def setup_voice_events(bot):
                 await asyncio.sleep(1)
                 for target, overwrite in list(listen_channel.overwrites.items()):
                     if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
-                        await listen_channel.set_permissions(target, None)
+                        await listen_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
                 await asyncio.sleep(1)
                 for target, overwrite in list(listen_channel.overwrites.items()):
                     if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
-                        await listen_channel.set_permissions(target, None)
+                        await listen_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
                 print(f"新規作成した聞き専チャンネル {listen_channel.name} には、現在ボイスに参加中の{len(after.channel.members)}名のメンバーだけに権限を付与し、自動的に付与された個人ロールの権限を完全に削除しました")
                 # ボイスチャンネルIDとテキストチャンネルIDを紐付けて保存（一時的なボイスチャンネル対策）
                 voice_to_text_channel_map[after.channel.id] = listen_channel.id
@@ -154,14 +154,14 @@ def setup_voice_events(bot):
                 await asyncio.sleep(1)
                 for target, overwrite in list(listen_channel.overwrites.items()):
                     if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
-                        await listen_channel.set_permissions(target, None)
+                        await listen_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
                 # 参加したメンバー個別に権限を付与
                 await listen_channel.set_permissions(member, send_messages=True, read_messages=True, read_message_history=True)
                 # 最後に再度クリーンアップして、絶対に不要な権限を残さない
                 await asyncio.sleep(1)
                 for target, overwrite in list(listen_channel.overwrites.items()):
                     if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
-                        await listen_channel.set_permissions(target, None)
+                        await listen_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
                 print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、テキストチャンネルの権限を付与しました。自動的に付与された個人ロールの権限も削除し、通話参加者以外は閲覧不可です。")
         
         # ボイスチャンネルから完全に退出した場合
@@ -198,8 +198,8 @@ def setup_voice_events(bot):
                     # 最後に再度クリーンアップして不要な権限を残さない
                     await asyncio.sleep(1)
                     for target, overwrite in list(listen_channel.overwrites.items()):
-                        if not isinstance(target, discord.Member) and target != after.channel.guild.default_role and target != after.channel.guild.owner and target != bot.user:
-                            await listen_channel.set_permissions(target, None)
+                        if not isinstance(target, discord.Member) and target != before.channel.guild.default_role and target != before.channel.guild.owner and target != bot.user:
+                            await listen_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
                     print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、テキストチャンネルの権限を完全に削除しました。")
             else:
                 # 人間のメンバーが誰もいなくなったので聞き専用テキストチャンネルを削除

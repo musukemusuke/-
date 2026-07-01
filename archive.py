@@ -256,7 +256,7 @@ async def archive_text_channel_history(channel, bot):
         await archive_channel.edit(sync_permissions=False)
         # 全ての既存の権限上書きを一度全て削除
         for target, overwrite in list(archive_channel.overwrites.items()):
-            await archive_channel.set_permissions(target, None)
+            await archive_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
         # デフォルトロール（全員）の権限を完全にOFFに
         await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False)
         # 元のボイスチャンネルを特定し、そこにいるメンバー全員に権限を付与
@@ -279,11 +279,11 @@ async def archive_text_channel_history(channel, bot):
         for target, overwrite in list(archive_channel.overwrites.items()):
             # 個人ロール（サーバーオーナー、Bot、メンバー以外）の権限を削除
             if not isinstance(target, discord.Member) and target != archive_channel.guild.default_role and target != archive_channel.guild.owner and target != bot.user:
-                await archive_channel.set_permissions(target, None)
+                await archive_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
         await asyncio.sleep(2)  # 再度同期を待ってから確実に削除
         for target, overwrite in list(archive_channel.overwrites.items()):
             if not isinstance(target, discord.Member) and target != archive_channel.guild.default_role and target != archive_channel.guild.owner and target != bot.user:
-                await archive_channel.set_permissions(target, None)
+                await archive_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
         print(f"{channel.name} のアーカイブが完了しました。全{len(messages)}件のメッセージを保存し、全ての不要な権限を削除しました。")
     except Exception as e:
         print(f"PDF生成中にエラーが発生しました: {e}")
