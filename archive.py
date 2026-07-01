@@ -254,7 +254,7 @@ async def archive_text_channel_history(channel, bot):
         # 全サーバーメンバーがアーカイブを見返せるように権限を設定（会話の履歴を共有）
         # Discordの自動権限同期を完全に無効化し、手動で純粋な権限状態を作る
         await archive_channel.edit(sync_permissions=False)
-        # 全ての既存の権限上書きを完全に削除（discord.pyで権限を削除する正しい方法はNoneを渡すこと）
+        # 全ての既存の権限上書きを完全に削除（最新discord.pyバージョンの正しい権限削除方法）
         for target, overwrite in list(archive_channel.overwrites.items()):
             await archive_channel.set_permissions(target, None)
         # 必要な権限だけを設定：デフォルトロールは閲覧のみ、Botは全権限

@@ -152,7 +152,7 @@ def setup_voice_events(bot):
                 # Botは個人ロールを持っていないのでスキップ
                 if member.bot or after.channel is None:
                     return
-                # まずサーバー側で自動的に付与された可能性のある全ての個人ロールの権限を削除
+                # まずサーバー側で自動的に付与された可能性のある全ての個人ロールの権限を削除（最新discord.py対応）
                 await asyncio.sleep(1)
                 guild = after.channel.guild
                 for target, overwrite in list(listen_channel.overwrites.items()):
@@ -198,7 +198,7 @@ def setup_voice_events(bot):
                             break
                     if member_role is not None:
                         await listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
-                    # 最後に再度クリーンアップして不要な権限を残さない
+                    # 最後に再度クリーンアップして不要な権限を残さない（最新discord.py対応）
                     await asyncio.sleep(1)
                     for target, overwrite in list(listen_channel.overwrites.items()):
                         if target != before.channel.guild.default_role and target != bot.user:

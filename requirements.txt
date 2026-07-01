@@ -1,4 +1,4 @@
-discord.py>=2.0
+discord.py>=2.3.2
 python-dotenv>=1.0.0
 reportlab>=4.0.0
 pillow>=10.0.0
