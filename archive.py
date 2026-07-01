@@ -27,12 +27,12 @@ def create_chat_pdf(messages, channel_name):
     except Exception as e:
         print(f"create_chat_pdf: MSゴシック登録失敗: {e}")
         try:
-            # Linux環境: Ubuntu標準のNoto Sans CJK JP
+            # Linux環境: Ubuntuでインストール可能なIPAフォント（ttf形式でReportLabと互換性あり）
             import os
             font_paths = [
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+                "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
+                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf",
             ]
             font_path = None
             for path in font_paths:
@@ -41,14 +41,14 @@ def create_chat_pdf(messages, channel_name):
                     break
             if font_path:
                 pdfmetrics.registerFont(TTFont('jp_font', font_path))
-                print(f"create_chat_pdf: Noto Sansフォントを使用 (path={font_path})")
+                print(f"create_chat_pdf: Linux用IPAゴシックフォントを使用 (path={font_path})")
             else:
                 raise Exception("フォントがどのパスにも存在しません")
         except Exception as e:
-            print(f"create_chat_pdf: フォント登録失敗: {e}")
+            print(f"create_chat_pdf: Linuxフォント登録失敗: {e}")
             # フォント一覧を出力
             import glob
-            font_files = glob.glob("/usr/share/fonts/**/*.ttc", recursive=True) + glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
+            font_files = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True) + glob.glob("/usr/share/fonts/**/*.ttc", recursive=True)
             print(f"利用可能なフォントファイル: {font_files}")
             raise
     
