@@ -93,12 +93,18 @@ def setup_voice_events(bot):
                         read_message_history=False
                     )
                 }
-                # 現在ボイスチャンネルにいるメンバー全員に送信権限を付与
+                # 現在ボイスチャンネルにいるメンバー全員の個人ロールに送信権限を付与
                 for voice_member in after.channel.members:
-                    # Botはスキップ
+                    # Botは個人ロールを持っていないのでスキップ
                     if voice_member.bot:
                         continue
-                    # メンバー個別に権限を設定
+                    # メンバーの個人ロールを探す
+                    voice_member_role = None
+                    for role in voice_member.roles:
+                        if role.name == voice_member.display_name:
+                            voice_member_role = role
+                            break
+                    # 個人ロールではなく、メンバー個別に権限を設定
                     permissions[voice_member] = discord.PermissionOverwrite(
                         send_messages=True,
                         read_messages=True,
@@ -144,11 +150,18 @@ def setup_voice_events(bot):
                             if channel_suffix == before_channel_normalized:
                                 listen_channel = channel
                                 break
-                # チャンネルが存在する場合、退出したメンバーの権限を削除
+                # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
                 if listen_channel is not None and not member.bot:
-                    # 個人ロールではなく、メンバー個別の権限を削除
-                    await listen_channel.set_permissions(member, send_messages=False, read_messages=False, read_message_history=False)
-                    print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、テキストチャンネルの権限を削除しました。")
+                    # メンバーの個人ロールを取得
+                    member_role = None
+                    for role in member.roles:
+                        if role.name == member.display_name:
+                            member_role = role
+                            break
+                    # 個人ロールの権限を削除
+                    if member_role is not None:
+                        await listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
+                        print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、個人ロール {member_role.name} のテキストチャンネル権限を削除しました。")
             else:
                 # 人間のメンバーが誰もいなくなったので聞き専用テキストチャンネルを削除
                 category = before.channel.category
@@ -303,16 +316,4 @@ def setup_voice_events(bot):
                                  except discord.errors.NotFound:
                                      print(f"ボイスチャンネル {channel.name} に紐づくテキストチャンネルが既に削除されていたため、処理をスキップしました。")
                              else:
-                                     print(f"テキストチャンネル{c.name}は既にアーカイブ処理済みのため、重複処理をスキップしました。")
-
-    # 新規メンバーがサーバーに参加したときのイベント
-    @bot.event
-    async def on_member_join(member):
-        print(f"新規メンバー {member.display_name} がサーバーに参加しました。全ての聞き専チャンネルの権限を確認します。")
-        # 参加したサーバー内の全てのテキストチャンネルを検索
-        for channel in member.guild.text_channels:
-            # 聞き専用チャンネルのみ処理
-            if channel.name.startswith("聞き専用-"):
-                # 新規メンバーの権限を確実にオフに設定
-                await channel.set_permissions(member, read_messages=False, send_messages=False)
-                print(f"新規メンバー {member.display_name} の {channel.name} の権限をオフに設定しました。")
+                                 print(f"テキストチャンネル{c.name}は既にアーカイブ処理済みのため、重複処理をスキップしました。")

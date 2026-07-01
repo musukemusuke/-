@@ -1,5 +1,6 @@
 import os
 import io
+import asyncio
 import unicodedata
 import discord
 from reportlab.pdfgen import canvas
@@ -225,60 +226,6 @@ async def archive_text_channel_history(channel, bot):
         print("アーカイブチャンネルが見つからないか、テキストチャンネルではありません。")
         return
     
-    # アーカイブ処理開始前にサーバー全体の個人ロール権限を一括クリーンアップ
-    if archive_channel.guild.owner:
-        # 全てのテキストチャンネルから個人ロールの権限を削除
-        for all_channel in archive_channel.guild.text_channels:
-            # 聞き専用チャンネルもアーカイブチャンネルも全て対象
-            for target, overwrite in list(all_channel.overwrites.items()):
-                # サーバーオーナー/Bot/デフォルトロール以外は全て個人ロールと判定して権限リセット
-                if hasattr(target, 'is_role') and target.is_role() and target != archive_channel.guild.default_role:
-                    if target != archive_channel.guild.owner and target != bot.user:
-                        reset_overwrite = discord.PermissionOverwrite()
-                        await all_channel.set_permissions(target, overwrite=reset_overwrite)
-                        print(f"サーバー全体クリーンアップ: {all_channel.name} からロール{target.name}の権限を削除しました")
-                # メンバー個別の権限も、ボイスチャンネルに入ってないメンバーはリセット
-                elif hasattr(target, 'is_member') and target.is_member():
-                    if target not in channel.members and target != archive_channel.guild.owner:
-                        reset_overwrite = discord.PermissionOverwrite()
-                        await all_channel.set_permissions(target, overwrite=reset_overwrite)
-        
-        # 親カテゴリが存在する場合、カテゴリ自体の権限も先に完全リセット
-        if archive_channel.category:
-            await archive_channel.category.edit(sync_permissions=False)
-            # カテゴリの全ての権限上書きを削除
-            for cat_target, cat_overwrite in list(archive_channel.category.overwrites.items()):
-                if cat_target != archive_channel.guild.owner and cat_target != bot.user and cat_target != archive_channel.guild.default_role:
-                    reset_cat_overwrite = discord.PermissionOverwrite()
-                    await archive_channel.category.set_permissions(cat_target, overwrite=reset_cat_overwrite)
-                    print(f"アーカイブカテゴリから不要な権限(target={cat_target})を削除しました")
-            # カテゴリのデフォルトロール権限もオフ
-            overwrite_default_cat = discord.PermissionOverwrite(read_messages=False, send_messages=False, view_channel=False)
-            overwrite_owner_cat = discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True)
-            overwrite_bot_cat = discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True)
-            await archive_channel.category.set_permissions(archive_channel.guild.default_role, overwrite=overwrite_default_cat)
-            await archive_channel.category.set_permissions(archive_channel.guild.owner, overwrite=overwrite_owner_cat)
-            await archive_channel.category.set_permissions(bot.user, overwrite=overwrite_bot_cat)
-        
-        # アーカイブチャンネル自体の権限同期を強制的に解除
-        await archive_channel.edit(sync_permissions=False)
-        # 全ての既存の権限上書きを一度全て削除（個人ロールを完全に無視）
-        for target, overwrite in list(archive_channel.overwrites.items()):
-            # サーバーオーナーとBot以外は全ての権限を削除
-            if target != archive_channel.guild.owner and target != bot.user and target != archive_channel.guild.default_role:
-                # discord.pyの正しい形式：set_permissions(対象, overwrite=PermissionOverwriteのインスタンス)で権限をリセット
-                reset_overwrite = discord.PermissionOverwrite()
-                await archive_channel.set_permissions(target, overwrite=reset_overwrite)
-                print(f"アーカイブチャンネルから不要な権限(target={target})を削除しました（個人ロールを無視）")
-        # デフォルトロールの権限を確実にオフに
-        overwrite_default = discord.PermissionOverwrite(read_messages=False, send_messages=False, view_channel=False)
-        overwrite_owner = discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True)
-        overwrite_bot = discord.PermissionOverwrite(read_messages=True, send_messages=True, view_channel=True)
-        await archive_channel.set_permissions(archive_channel.guild.default_role, overwrite=overwrite_default)
-        await archive_channel.set_permissions(archive_channel.guild.owner, overwrite=overwrite_owner)
-        await archive_channel.set_permissions(bot.user, overwrite=overwrite_bot)
-        print("アーカイブチャンネル+親カテゴリ+サーバー全体の権限を事前に完全にリセット: 個人ロールを含む全ての不要な権限を削除しました")
-    
     # チャンネルのメッセージを全て取得（古い順に並べ替え）
     messages = []
     async for message in channel.history(limit=None, oldest_first=True):
@@ -304,22 +251,35 @@ async def archive_text_channel_history(channel, bot):
             img_discord_file = discord.File(img_file, filename=f"{channel.name}_archive.png")
             files.append(img_discord_file)
         print("discord.File作成完了、送信開始")
-        # アーカイブチャンネルの権限を確認し、サーバーオーナー以外が閲覧できないように完全に設定
+        # 元のボイスチャンネルに参加していたメンバーがアーカイブを見返せるように権限を設定
+        # まず親カテゴリとの権限同期を強制的に解除
+        await archive_channel.edit(sync_permissions=False)
+        # 全ての既存の権限上書きを一度全て削除
+        for target, overwrite in list(archive_channel.overwrites.items()):
+            await archive_channel.set_permissions(target, None)
+        # デフォルトロール（全員）の権限を完全にOFFに
+        await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False)
+        # 元のボイスチャンネルを特定し、そこにいるメンバー全員に権限を付与
+        voice_channel_name = channel.name.replace("聞き専用-", "")
+        voice_channel = discord.utils.get(channel.guild.voice_channels, name=voice_channel_name)
+        if voice_channel:
+            for member in voice_channel.members:
+                if not member.bot:
+                    await archive_channel.set_permissions(member, read_messages=True, send_messages=True)
+            print(f"元のボイスチャンネル{voice_channel.name}の{len(voice_channel.members)}名にアーカイブの閲覧権限を付与しました")
+        # サーバーオーナーとBotにも権限を付与
         if archive_channel.guild.owner:
-            # まず親カテゴリとの権限同期を強制的に解除
-            await archive_channel.edit(sync_permissions=False)
-            # 全ての既存の権限上書きを一度全て削除
-            for target, overwrite in list(archive_channel.overwrites.items()):
-                await archive_channel.set_permissions(target, None)  # Noneで権限上書きを完全に削除
-            # デフォルトロール（全員）の閲覧権限を完全にOFFに
-            await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False, view_channel=False)
-            # サーバーオーナーだけ全ての権限をONに
-            await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True, send_messages=True, view_channel=True)
-            # Bot自身にも権限を付与して、メッセージを送信できるようにする
-            await archive_channel.set_permissions(bot.user, read_messages=True, send_messages=True, view_channel=True)
-            print(f"アーカイブチャンネルの権限を完全にリセット: サーバーオーナー({archive_channel.guild.owner.display_name})とBotのみ閲覧可能（チャンネル自体が非表示）")
+            await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True, send_messages=True)
+        await archive_channel.set_permissions(bot.user, read_messages=True, send_messages=True)
+        print("アーカイブの権限設定完了: 会話に参加していたメンバーが履歴を見返せるようになりました")
         
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", files=files)
+        # サーバー側で自動的に個人ロールに権限が付与されるケースに備えて、再度権限をリセット
+        await asyncio.sleep(2)  # 自動同期が完了するのを少し待つ
+        for target, overwrite in list(archive_channel.overwrites.items()):
+            # 個人ロール（サーバーオーナー、Bot、メンバー以外）の権限を削除
+            if not isinstance(target, discord.Member) and target != archive_channel.guild.default_role and target != archive_channel.guild.owner and target != bot.user:
+                await archive_channel.set_permissions(target, None)
         print(f"{channel.name} のアーカイブが完了しました。全{len(messages)}件のメッセージを保存しました。")
     except Exception as e:
         print(f"PDF生成中にエラーが発生しました: {e}")
