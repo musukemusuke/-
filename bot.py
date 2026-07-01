@@ -244,6 +244,38 @@ async def on_message(message):
     # 通常のコマンドも処理できるようにする
     await bot.process_commands(message)
 
+# ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
+@bot.event
+async def on_voice_state_update(member, before, after):
+    # 新しくボイスチャンネルに参加した場合（前はどこにもいなかった）
+    if before.channel is None and after.channel is not None:
+        # 現在のボイスチャンネルの親カテゴリーを取得
+        category = after.channel.category
+        # すでに「聞き専用-○○」のようなチャンネルが存在するか確認
+        listen_channel_exists = any(
+            channel.name.startswith("聞き専用-") and channel.category == category
+            for channel in category.voice_channels
+        )
+        # まだ存在しなければ作成
+        if not listen_channel_exists:
+            listen_channel = await category.create_voice_channel(
+                name=f"聞き専用-{after.channel.name}",
+                user_limit=10,  # 最大10人まで（必要に応じて変更可能）
+                reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用チャンネルを作成"
+            )
+            print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用チャンネル {listen_channel.name} を作成しました。")
+    
+    # ボイスチャンネルから全員が退出したら、聞き専用チャンネルも自動削除（オプション）
+    if after.channel is None and before.channel is not None:
+        # 元のチャンネルにまだ誰かいるか確認
+        if len(before.channel.members) == 0:
+            # 同じカテゴリー内の聞き専用チャンネルを探して削除
+            category = before.channel.category
+            for channel in category.voice_channels:
+                if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    await channel.delete()
+                    print(f"チャンネル {before.channel.name} が無人になったので、聞き専用チャンネル {channel.name} を削除しました。")
+
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
 
