@@ -232,9 +232,10 @@ async def on_message(message):
         )
         # スレッドにコマンド実行者を追加
         await thread.add_user(member)
-        # コマンドメッセージ自体も削除してチャンネルをきれいに保つ
+        # スレッド内だけに本人に通知を送る（他の人には見えない）
+        await thread.send(f"{member.mention} プライベートスレッドを作成しました！このスレッド内で自由に投稿できます。")
+        # コマンドメッセージ自体も削除して誰が作ったか分からないようにする
         await message.delete()
-        await message.channel.send(f"{member.mention} のプライベートスレッド {thread.mention} を作成しました！")
         print(f"メンバー {member.display_name} のプライベートスレッドを作成しました。")
         return
     
