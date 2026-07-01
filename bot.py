@@ -251,30 +251,42 @@ async def on_voice_state_update(member, before, after):
     if before.channel is None and after.channel is not None:
         # 現在のボイスチャンネルの親カテゴリーを取得
         category = after.channel.category
-        # すでに「聞き専用-○○」のようなチャンネルが存在するか確認
+        # すでに「聞き専用-○○」のようなテキストチャンネルが存在するか確認
         listen_channel_exists = any(
             channel.name.startswith("聞き専用-") and channel.category == category
-            for channel in category.voice_channels
+            for channel in category.text_channels
         )
-        # まだ存在しなければ作成
+        # まだ存在しなければテキストチャンネルとして作成
         if not listen_channel_exists:
-            listen_channel = await category.create_voice_channel(
+            # サーバーのデフォルトロールを取得
+            guild = after.channel.guild
+            # 全員が読み取り可能だが、メッセージを送信できないように権限を設定
+            permissions = {
+                guild.default_role: discord.PermissionOverwrite(
+                    send_messages=True,   # メッセージ送信可能（マイクが使えない人もテキストで参加）
+                    read_messages=True,   # 閲覧は可能
+                    read_message_history=True
+                )
+            }
+            listen_channel = await category.create_text_channel(
                 name=f"聞き専用-{after.channel.name}",
-                user_limit=10,  # 最大10人まで（必要に応じて変更可能）
-                reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用チャンネルを作成"
+                overwrites=permissions,
+                reason=f"{member.display_name}が{after.channel.name}に参加したので聞き専用テキストチャンネルを作成"
             )
-            print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用チャンネル {listen_channel.name} を作成しました。")
+            # 作成したチャンネルに案内メッセージを投稿
+            await listen_channel.send(f"📢 こちらは{after.channel.mention}の聞き専用テキストチャンネルです。チャンネル内の会話を聞きながら、テキストでコメントしたい方はこちらで交流できます！")
+            print(f"メンバー {member.display_name} が{after.channel.name}に参加したので、聞き専用テキストチャンネル {listen_channel.name} を作成しました。")
     
-    # ボイスチャンネルから全員が退出したら、聞き専用チャンネルも自動削除（オプション）
+    # ボイスチャンネルから全員が退出したら、聞き専用テキストチャンネルも自動削除
     if after.channel is None and before.channel is not None:
         # 元のチャンネルにまだ誰かいるか確認
         if len(before.channel.members) == 0:
-            # 同じカテゴリー内の聞き専用チャンネルを探して削除
+            # 同じカテゴリー内の聞き専用テキストチャンネルを探して削除
             category = before.channel.category
-            for channel in category.voice_channels:
+            for channel in category.text_channels:
                 if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
                     await channel.delete()
-                    print(f"チャンネル {before.channel.name} が無人になったので、聞き専用チャンネル {channel.name} を削除しました。")
+                    print(f"チャンネル {before.channel.name} が無人になったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
