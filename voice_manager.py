@@ -150,18 +150,11 @@ def setup_voice_events(bot):
                             if channel_suffix == before_channel_normalized:
                                 listen_channel = channel
                                 break
-                # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
+                # チャンネルが存在する場合、退出したメンバーの権限を削除
                 if listen_channel is not None and not member.bot:
-                    # メンバーの個人ロールを取得
-                    member_role = None
-                    for role in member.roles:
-                        if role.name == member.display_name:
-                            member_role = role
-                            break
-                    # 個人ロールの権限を削除
-                    if member_role is not None:
-                        await listen_channel.set_permissions(member_role, send_messages=False, read_messages=False, read_message_history=False)
-                        print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、個人ロール {member_role.name} のテキストチャンネル権限を削除しました。")
+                    # 個人ロールではなく、メンバー個別の権限を削除
+                    await listen_channel.set_permissions(member, send_messages=False, read_messages=False, read_message_history=False)
+                    print(f"メンバー {member.display_name} が{before.channel.name}から退出したので、テキストチャンネルの権限を削除しました。")
             else:
                 # 人間のメンバーが誰もいなくなったので聞き専用テキストチャンネルを削除
                 category = before.channel.category
