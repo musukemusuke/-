@@ -127,15 +127,15 @@ def setup_voice_events(bot):
             remaining_humans = [m for m in before.channel.members if not m.bot]
             if len(remaining_humans) > 0:
                 # 退出したボイスチャンネルに紐づく聞き専用テキストチャンネルを探す
-                    category = before.channel.category
-                    before_channel_normalized = normalize_channel_name(before.channel.name)
-                    listen_channel = None
-                    for channel in category.text_channels:
-                        if channel.name.startswith("聞き専用-"):
-                            channel_suffix = channel.name[len("聞き専用-"):]
-                            if channel_suffix == before_channel_normalized:
-                                listen_channel = channel
-                                break
+                category = before.channel.category
+                before_channel_normalized = normalize_channel_name(before.channel.name)
+                listen_channel = None
+                for channel in category.text_channels:
+                    if channel.name.startswith("聞き専用-"):
+                        channel_suffix = channel.name[len("聞き専用-"):]
+                        if channel_suffix == before_channel_normalized:
+                            listen_channel = channel
+                            break
                 # チャンネルが存在する場合、退出したメンバーの個人ロールの権限を削除
                 if listen_channel is not None and not member.bot:
                     # メンバーの個人ロールを取得
