@@ -24,6 +24,57 @@ async def on_ready():
     print('Botが正常に起動しました！')
     print('------')
 
+    # Bot起動時に、すでにサーバーにいるのに個人ロールがないメンバーをチェックして付与
+    for guild in bot.guilds:
+        print(f"サーバー {guild.name} のメンバーをチェックしています...")
+        for member in guild.members:
+            # Botはスキップ、すでに個人ロールを持っているメンバーもスキップ
+            if member.bot:
+                continue
+            # メンバーが自分の名前のロールを持っているか確認
+            has_role = any(role.name == member.display_name for role in member.roles)
+            if not has_role:
+                print(f"メンバー {member.display_name} にロールが付与されていないので作成します...")
+                role_color = discord.Color.random()
+                member_permissions = discord.Permissions()
+                member_permissions.view_channel = True
+                member_permissions.send_messages = True
+                member_permissions.read_message_history = True
+                member_permissions.add_reactions = True
+                member_permissions.embed_links = True
+                member_permissions.attach_files = True
+                member_permissions.external_emojis = True
+                member_permissions.external_stickers = True
+                member_permissions.send_messages_in_threads = True
+                member_permissions.send_polls = True
+                member_permissions.use_application_commands = True
+                member_permissions.mention_everyone = False
+                member_permissions.connect = True
+                member_permissions.speak = True
+                member_permissions.stream = True
+                member_permissions.use_voice_activation = True
+                member_permissions.set_voice_channel_status = True
+                member_permissions.use_embedded_activities = True
+                member_permissions.change_nickname = True
+
+                new_role = await guild.create_role(
+                    name=member.display_name,
+                    color=role_color,
+                    permissions=member_permissions,
+                    reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
+                )
+                await member.add_roles(new_role)
+                print(f"メンバー {member.display_name} に新しい個人ロールを付与しました。")
+
+                # 全チャンネルの権限を設定
+                for channel in guild.channels:
+                    if channel.id in read_only_channel_ids:
+                        await channel.set_permissions(new_role, view_channel=True, send_messages=False)
+                    else:
+                        await channel.set_permissions(new_role, view_channel=True, send_messages=True)
+                    print(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
+        print(f"サーバー {guild.name} のメンバーチェックが完了しました。")
+
 @bot.event
 async def on_member_join(member):
     # Botは処理をスキップ
