@@ -93,18 +93,12 @@ def setup_voice_events(bot):
                         read_message_history=False
                     )
                 }
-                # 現在ボイスチャンネルにいるメンバー全員の個人ロールに送信権限を付与
+                # 現在ボイスチャンネルにいるメンバー全員に送信権限を付与
                 for voice_member in after.channel.members:
-                    # Botは個人ロールを持っていないのでスキップ
+                    # Botはスキップ
                     if voice_member.bot:
                         continue
-                    # メンバーの個人ロールを探す
-                    voice_member_role = None
-                    for role in voice_member.roles:
-                        if role.name == voice_member.display_name:
-                            voice_member_role = role
-                            break
-                    # 個人ロールではなく、メンバー個別に権限を設定
+                    # メンバー個別に権限を設定
                     permissions[voice_member] = discord.PermissionOverwrite(
                         send_messages=True,
                         read_messages=True,

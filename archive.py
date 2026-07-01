@@ -225,6 +225,24 @@ async def archive_text_channel_history(channel, bot):
         print("アーカイブチャンネルが見つからないか、テキストチャンネルではありません。")
         return
     
+    # アーカイブ処理開始前に必ず個人ロールを含む全ての不要な権限を完全に排除
+    if archive_channel.guild.owner:
+        # 親カテゴリとの権限同期を強制的に解除
+        await archive_channel.edit(sync_permissions=False)
+        # 全ての既存の権限上書きを一度全て削除（個人ロールを完全に無視）
+        for target, overwrite in list(archive_channel.overwrites.items()):
+            # サーバーオーナーとBot以外は全ての権限を削除
+            if target != archive_channel.guild.owner and target != bot.user and target != archive_channel.guild.default_role:
+                await archive_channel.set_permissions(target, None)
+                print(f"アーカイブチャンネルから不要な権限(target={target})を削除しました（個人ロールを無視）")
+        # デフォルトロールの権限を確実にオフに
+        await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False, view_channel=False)
+        # サーバーオーナーの権限を確実にオンに
+        await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True, send_messages=True, view_channel=True)
+        # Bot自身の権限を確実にオンに
+        await archive_channel.set_permissions(bot.user, read_messages=True, send_messages=True, view_channel=True)
+        print("アーカイブチャンネルの権限を事前に完全にリセット: 個人ロールを含む全ての不要な権限を削除しました")
+    
     # チャンネルのメッセージを全て取得（古い順に並べ替え）
     messages = []
     async for message in channel.history(limit=None, oldest_first=True):
@@ -258,12 +276,12 @@ async def archive_text_channel_history(channel, bot):
             for target, overwrite in list(archive_channel.overwrites.items()):
                 await archive_channel.set_permissions(target, None)  # Noneで権限上書きを完全に削除
             # デフォルトロール（全員）の閲覧権限を完全にOFFに
-            await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False)
-            # サーバーオーナーだけ閲覧権限をONに
-            await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True, send_messages=True)
+            await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False, view_channel=False)
+            # サーバーオーナーだけ全ての権限をONに
+            await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True, send_messages=True, view_channel=True)
             # Bot自身にも権限を付与して、メッセージを送信できるようにする
-            await archive_channel.set_permissions(bot.user, read_messages=True, send_messages=True)
-            print(f"アーカイブチャンネルの権限を完全にリセット: サーバーオーナー({archive_channel.guild.owner.display_name})とBotのみ閲覧可能")
+            await archive_channel.set_permissions(bot.user, read_messages=True, send_messages=True, view_channel=True)
+            print(f"アーカイブチャンネルの権限を完全にリセット: サーバーオーナー({archive_channel.guild.owner.display_name})とBotのみ閲覧可能（チャンネル自体が非表示）")
         
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", files=files)
         print(f"{channel.name} のアーカイブが完了しました。全{len(messages)}件のメッセージを保存しました。")
