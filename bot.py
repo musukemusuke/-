@@ -1,7 +1,9 @@
 import os
+import io
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+from PIL import Image, ImageDraw, ImageFont
 
 # .envファイルから環境変数を読み込み
 load_dotenv()
@@ -244,6 +246,96 @@ async def on_message(message):
     # 通常のコマンドも処理できるようにする
     await bot.process_commands(message)
 
+# 聞き専用テキストチャンネルの履歴をアーカイブするチャンネルID
+ARCHIVE_CHANNEL_ID = 1521780512795132015  # アーカイブ用チャンネルのID
+
+# テキストを描画して画像を生成する関数
+def create_chat_image(messages, channel_name):
+    # 画像の基本設定
+    width = 800
+    line_height = 30
+    padding = 20
+    title_height = 50
+    # メッセージ1件あたりの行数を計算して高さを算出
+    total_lines = sum(len(str(m.content).split('\n')) for m in messages) + 2  # タイトル分+フッター分
+    height = title_height + (len(messages) + 2) * line_height + padding * 2
+    
+    # 背景画像を作成（黒背景のDiscord風）
+    img = Image.new('RGB', (width, height), color=(54, 57, 63))
+    draw = ImageDraw.Draw(img)
+    
+    # フォントを読み込み（システムの日本語フォントを使用）
+    try:
+        font = ImageFont.truetype("msgothic.ttc", 16)
+        title_font = ImageFont.truetype("msgothic.ttc", 20)
+    except:
+        font = ImageFont.load_default()
+        title_font = ImageFont.load_default()
+    
+    # タイトルを描画
+    draw.text((padding, padding), f"アーカイブ: {channel_name}", fill=(255,255,255), font=title_font)
+    current_y = padding + title_height
+    
+    # メッセージを1件ずつ描画
+    for message in messages:
+        author = message.author.display_name
+        content = message.content if message.content else "(添付ファイル等)"
+        # ユーザー名を青色で描画
+        draw.text((padding, current_y), f"{author}:", fill=(114,137,218), font=font)
+        # メッセージ内容を白で描画（長い場合は折り返し）
+        text_width, _ = draw.textlength(f"{author}: ", font=font)
+        draw.text((padding + text_width, current_y), content, fill=(255,255,255), font=font)
+        current_y += line_height
+    
+    # フッターを描画
+    draw.text((padding, current_y), f"全{len(messages)}件のメッセージ", fill=(185,187,190), font=font)
+    
+    # 画像をバイトストリームに保存
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+    return img_byte_arr
+
+# テキストチャンネルのメッセージ履歴を画像でアーカイブチャンネルに送信する関数
+async def archive_text_channel_history(channel):
+    if ARCHIVE_CHANNEL_ID == 0:
+        print("アーカイブチャンネルIDが設定されていないため、履歴を保存できませんでした。")
+        return
+    archive_channel = bot.get_channel(ARCHIVE_CHANNEL_ID)
+    if not archive_channel or not isinstance(archive_channel, discord.TextChannel):
+        print("アーカイブチャンネルが見つからないか、テキストチャンネルではありません。")
+        return
+    
+    # チャンネルのメッセージを全て取得（古い順に並べ替え）
+    messages = []
+    async for message in channel.history(limit=None, oldest_first=True):
+        if not message.author.bot:  # botのメッセージは除外
+            messages.append(message)
+    
+    if not messages:
+        print(f"{channel.name} のメッセージは0件だったのでアーカイブしませんでした。")
+        return
+    
+    # チャット画像を生成
+    try:
+        img_file = create_chat_image(messages, channel.name)
+        # 画像を添付して送信
+        file = discord.File(img_file, filename=f"{channel.name}_archive.png")
+        await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", file=file)
+        print(f"{channel.name} の画像アーカイブが完了しました。全{len(messages)}件のメッセージを画像に保存しました。")
+    except Exception as e:
+        print(f"画像生成中にエラーが発生しました: {e}")
+        # 画像生成に失敗した場合はテキストでフォールバック
+        await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）")
+        for message in messages:
+            content = f"**{message.author.display_name}**: {message.content}" if message.content else f"**{message.author.display_name}**: (添付ファイル等)"
+            if len(content) > 1900:
+                for i in range(0, len(content), 1900):
+                    await archive_channel.send(content[i:i+1900])
+            else:
+                await archive_channel.send(content)
+        await archive_channel.send(f"✅ {channel.name} のテキストアーカイブが完了しました。全{len(messages)}件のメッセージを保存しました。\n---")
+
 # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -277,6 +369,8 @@ async def on_voice_state_update(member, before, after):
             # 人間が誰もいなくなったら移動元の聞き専用テキストチャンネルを削除
             for channel in before_category.text_channels:
                 if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    # 削除前に履歴をアーカイブ
+                    await archive_text_channel_history(channel)
                     await channel.delete()
                     print(f"移動によりチャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
     
@@ -376,8 +470,52 @@ async def on_voice_state_update(member, before, after):
             category = before.channel.category
             for channel in category.text_channels:
                 if channel.name.startswith("聞き専用-") and channel.name.endswith(before.channel.name):
+                    # 削除前に履歴をアーカイブ
+                    await archive_text_channel_history(channel)
                     await channel.delete()
                     print(f"チャンネル {before.channel.name} にbot以外のメンバーがいなくなったので、聞き専用テキストチャンネル {channel.name} を削除しました。")
+
+# サーバーのチャンネルが更新されたときのイベント（名前変更などを検知）
+@bot.event
+async def on_guild_channel_update(before, after):
+    # ボイスチャンネルの名前が変更された場合
+    if isinstance(before, discord.VoiceChannel) and isinstance(after, discord.VoiceChannel) and before.name != after.name:
+        # 休止チャンネルや「個室を作る」チャンネルは処理しない
+        if "休止" in after.name or "個室を作る" in after.name:
+            return
+        # 元の名前の聞き専用テキストチャンネルを探す
+        category = after.category
+        old_listen_channel = None
+        for channel in category.text_channels:
+            if channel.name.startswith("聞き専用-") and channel.name.endswith(before.name):
+                old_listen_channel = channel
+                break
+        # 古いテキストチャンネルが存在する場合、新しい名前に変更
+        if old_listen_channel is not None:
+            new_name = f"聞き専用-{after.name}"
+            await old_listen_channel.edit(name=new_name)
+            print(f"ボイスチャンネル {before.name} が{after.name}に名前変更されたので、テキストチャンネルを{new_name}に変更しました。")
+            # チャンネルのトピックやメッセージも更新（必要に応じて）
+            await old_listen_channel.send(f"🔄 ボイスチャンネルの名前が{after.mention}に変更されたので、このテキストチャンネルの名前も{new_name}に更新しました！")
+
+# サーバーのチャンネルが削除されたときのイベント
+@bot.event
+async def on_guild_channel_delete(channel):
+    # 削除されたのがボイスチャンネルの場合
+    if isinstance(channel, discord.VoiceChannel):
+        # 休止チャンネルや「個室を作る」チャンネルは処理しない
+        if "休止" in channel.name or "個室を作る" in channel.name:
+            return
+        # 削除されたボイスチャンネルに紐づく聞き専用テキストチャンネルを探して削除
+        category = channel.category
+        if category is None:
+            return
+        for text_channel in category.text_channels:
+            if text_channel.name.startswith("聞き専用-") and text_channel.name.endswith(channel.name):
+                # 削除前に履歴をアーカイブ
+                await archive_text_channel_history(text_channel)
+                await text_channel.delete()
+                print(f"ボイスチャンネル {channel.name} が削除されたので、紐づくテキストチャンネル {text_channel.name} も削除しました。")
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
