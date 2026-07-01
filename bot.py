@@ -63,14 +63,14 @@ async def on_member_join(member):
     await member.add_roles(new_role)
 
     # すべてのチャンネルで閲覧権限を確実に有効化
-     for channel in guild.channels:
-         if channel.id in read_only_channel_ids:
-             # 読み取り専用チャンネルは閲覧可、送信不可
-             await channel.set_permissions(new_role, view_channel=True, send_messages=False)
-         else:
-             # 通常チャンネルは閲覧も送信も可
-             await channel.set_permissions(new_role, view_channel=True, send_messages=True)
-         print(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
+    for channel in guild.channels:
+        if channel.id in read_only_channel_ids:
+            # 読み取り専用チャンネルは閲覧可、送信不可
+            await channel.set_permissions(new_role, view_channel=True, send_messages=False)
+        else:
+            # 通常チャンネルは閲覧も送信も可
+            await channel.set_permissions(new_role, view_channel=True, send_messages=True)
+        print(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
 
 @bot.event
 async def on_member_remove(member):
