@@ -264,13 +264,25 @@ def create_chat_image(messages, channel_name):
     img = Image.new('RGB', (width, height), color=(54, 57, 63))
     draw = ImageDraw.Draw(img)
     
-    # フォントを読み込み（システムの日本語フォントを使用）
+    # フォントを読み込み（環境に応じて日本語フォントを自動選択）
     try:
+        # Windows環境: MSゴシック
         font = ImageFont.truetype("msgothic.ttc", 16)
         title_font = ImageFont.truetype("msgothic.ttc", 20)
     except:
-        font = ImageFont.load_default()
-        title_font = ImageFont.load_default()
+        try:
+            # Linux環境: Noto Sans CJK JP
+            font = ImageFont.truetype("NotoSansCJK-Regular.ttc", 16)
+            title_font = ImageFont.truetype("NotoSansCJK-Regular.ttc", 20)
+        except:
+            try:
+                # Ubuntu等: 日本語フォント(mplus)
+                font = ImageFont.truetype("mplus-1m-regular.ttf", 16)
+                title_font = ImageFont.truetype("mplus-1m-regular.ttf", 20)
+            except:
+                # どのフォントも読み込めなかった場合はデフォルトフォント
+                font = ImageFont.load_default()
+                title_font = ImageFont.load_default()
     
     # タイトルを描画
     draw.text((padding, padding), f"アーカイブ: {channel_name}", fill=(255,255,255), font=title_font)
@@ -318,13 +330,18 @@ async def archive_text_channel_history(channel):
     
     # チャット画像を生成
     try:
+        import traceback
+        print(f"画像生成開始: {channel.name}, メッセージ数: {len(messages)}")
         img_file = create_chat_image(messages, channel.name)
+        print("画像生成完了、ファイルオブジェクト作成")
         # 画像を添付して送信
         file = discord.File(img_file, filename=f"{channel.name}_archive.png")
+        print("discord.File作成完了、送信開始")
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", file=file)
         print(f"{channel.name} の画像アーカイブが完了しました。全{len(messages)}件のメッセージを画像に保存しました。")
     except Exception as e:
         print(f"画像生成中にエラーが発生しました: {e}")
+        print(traceback.format_exc())
         # 画像生成に失敗した場合はテキストでフォールバック
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）")
         for message in messages:
