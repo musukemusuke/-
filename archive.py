@@ -250,13 +250,16 @@ async def archive_text_channel_history(channel, bot):
             img_discord_file = discord.File(img_file, filename=f"{channel.name}_archive.png")
             files.append(img_discord_file)
         print("discord.File作成完了、送信開始")
-        # アーカイブチャンネルの権限を確認し、サーバーオーナー以外が閲覧できないように設定
+        # アーカイブチャンネルの権限を確認し、サーバーオーナー以外が閲覧できないように完全に設定
         if archive_channel.guild.owner:
-            # デフォルトロール（全員）の閲覧権限をOFFに
-            await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False)
+            # 全ての既存の権限上書きを一度クリア
+            for target, overwrite in list(archive_channel.overwrites.items()):
+                await archive_channel.set_permissions(target, read_messages=False, send_messages=False)
+            # デフォルトロール（全員）の閲覧権限を完全にOFFに
+            await archive_channel.set_permissions(archive_channel.guild.default_role, read_messages=False, send_messages=False)
             # サーバーオーナーだけ閲覧権限をONに
-            await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True)
-            print(f"アーカイブチャンネルの権限を設定: サーバーオーナー({archive_channel.guild.owner.display_name})のみ閲覧可能")
+            await archive_channel.set_permissions(archive_channel.guild.owner, read_messages=True, send_messages=True)
+            print(f"アーカイブチャンネルの権限を完全に設定: サーバーオーナー({archive_channel.guild.owner.display_name})のみ閲覧可能")
         
         await archive_channel.send(f"📦 **アーカイブ: {channel.name}**（元ボイスチャンネル: {channel.name.replace('聞き専用-', '')}）", files=files)
         print(f"{channel.name} のアーカイブが完了しました。全{len(messages)}件のメッセージを保存しました。")

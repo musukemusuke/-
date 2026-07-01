@@ -55,6 +55,9 @@ def setup_voice_events(bot):
                         # 既にアーカイブ済みのチャンネルは処理をスキップ
                         if channel.id not in archived_channel_ids:
                             archived_channel_ids.add(channel.id)
+                            # 削除前に全ての個人ロールの権限をリセット
+                            for target, overwrite in list(channel.overwrites.items()):
+                                await channel.set_permissions(target, read_messages=False, send_messages=False)
                             # 削除前に履歴をアーカイブ
                             await archive_text_channel_history(channel, bot)
                             await channel.delete()
@@ -178,6 +181,9 @@ def setup_voice_events(bot):
                         # 既にアーカイブ済みのチャンネルは処理をスキップ
                         if channel.id not in archived_channel_ids:
                             archived_channel_ids.add(channel.id)
+                            # 削除前に全ての個人ロールの権限をリセット
+                            for target, overwrite in list(channel.overwrites.items()):
+                                await channel.set_permissions(target, read_messages=False, send_messages=False)
                             # 削除前に履歴をアーカイブ
                             await archive_text_channel_history(channel, bot)
                             await channel.delete()
@@ -213,6 +219,9 @@ def setup_voice_events(bot):
                 if old_listen_channel.id not in archived_channel_ids:
                     archived_channel_ids.add(old_listen_channel.id)
                     try:
+                        # 削除前に全ての個人ロールの権限をリセット
+                        for target, overwrite in list(old_listen_channel.overwrites.items()):
+                            await old_listen_channel.set_permissions(target, read_messages=False, send_messages=False)
                         await archive_text_channel_history(old_listen_channel, bot)
                         await old_listen_channel.delete()
                         print(f"名前変更前の古いテキストチャンネル {old_listen_channel.name} をアーカイブして削除しました。")
@@ -293,6 +302,9 @@ def setup_voice_events(bot):
                 if text_channel.id not in archived_channel_ids:
                     archived_channel_ids.add(text_channel.id)
                     try:
+                        # 削除前に全ての個人ロールの権限をリセット
+                        for target, overwrite in list(text_channel.overwrites.items()):
+                            await text_channel.set_permissions(target, read_messages=False, send_messages=False)
                         # 削除前に履歴をアーカイブ
                         await archive_text_channel_history(text_channel, bot)
                         await text_channel.delete()
