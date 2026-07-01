@@ -240,7 +240,7 @@ async def on_message(message):
         return
     
     # 通常のコマンドも処理できるようにする
-            await bot.process_commands(message)
+    await bot.process_commands(message)
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
