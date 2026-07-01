@@ -63,6 +63,18 @@ async def on_member_join(member):
             await channel.set_permissions(new_role, send_messages=False)
             print(f"チャンネル {channel.name} で {new_role.name} のメッセージ送信権限を無効にしました。")
 
+@bot.event
+async def on_member_remove(member):
+    guild = member.guild
+    # 退出したメンバーの名前と一致するロールを検索して削除
+    for role in guild.roles:
+        if role.name == member.display_name:
+            # Bot自身より下位のロールのみ削除可能（権限の問題を回避）
+            if role < guild.me.top_role:
+                await role.delete(reason=f"メンバー {member.display_name} が退出したため個人ロールを削除")
+                print(f"メンバー {member.display_name} が退出したため、ロール {role.name} を削除しました。")
+                break
+
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
 
