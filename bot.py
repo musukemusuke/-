@@ -233,8 +233,11 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
+    # 絶対にイベントが発火していることを確認するため、最初に強制ログ出力
+    logger.critical(f"!!! on_member_removeイベント発生!!! 退出メンバー: {member.display_name}, ID: {member.id}")
     # Botは処理をスキップ
     if member.bot:
+        logger.info("Botメンバーのため処理をスキップします")
         return
     guild = member.guild
     member_display_name = member.display_name
