@@ -38,19 +38,19 @@ def setup_voice_events(bot):
     async def on_voice_state_update(member, before, after):
         # ボイスチャンネルに誰かが参加したタイミングで特殊チャンネルの権限を再確認
         if after.channel is not None:
-                if "休止" in after.channel.name or "個室を作る" in after.channel.name:
-                    text_channel = None
-                    # サーバー全体の全テキストチャンネルから検索
-                    all_text_channels = [c for c in after.channel.guild.text_channels]
+            if "休止" in after.channel.name or "個室を作る" in after.channel.name:
+                text_channel = None
+                # サーバー全体の全テキストチャンネルから検索
+                all_text_channels = [c for c in after.channel.guild.text_channels]
+                for channel in all_text_channels:
+                    if hasattr(channel, 'voice_channel') and channel.voice_channel == after.channel:
+                        text_channel = channel
+                        break
+                if not text_channel:
                     for channel in all_text_channels:
-                        if hasattr(channel, 'voice_channel') and channel.voice_channel == after.channel:
+                        if channel.name == after.channel.name or channel.name.startswith(after.channel.name):
                             text_channel = channel
                             break
-                    if not text_channel:
-                        for channel in all_text_channels:
-                            if channel.name == after.channel.name or channel.name.startswith(after.channel.name):
-                                text_channel = channel
-                                break
                 if text_channel:
                     await text_channel.set_permissions(after.channel.guild.default_role, send_messages=False, read_messages=True)
         # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
@@ -80,7 +80,7 @@ def setup_voice_events(bot):
                 # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
                 if not text_channel:
                     print(f"[デバッグ] voice_channel属性が見つからなかったので名前で検索開始")
-                    for channel in before.channel.category.text_channels:
+                    for channel in all_text_channels:
                         if channel.name == before.channel.name or channel.name.startswith(before.channel.name):
                             text_channel = channel
                             print(f"[デバッグ] 名前一致でテキストチャンネルを発見: {text_channel.name}")
@@ -90,10 +90,18 @@ def setup_voice_events(bot):
                 
                 if text_channel and text_channel.id not in archived_channel_ids:
                     archived_channel_ids.add(text_channel.id)
-                    print(f"ボイスチャンネル{before.channel.name}に誰もいなくなったので、標準テキストチャンネル{text_channel.name}をアーカイブ開始")
+                    print(f"ボイスチャンネル{before.channel.name}に誰もいなくなったので、ボイス紐付きテキストチャンネル{text_channel.name}をアーカイブ開始")
                     # メッセージ履歴をPDFにアーカイブ
                     await archive_text_channel_history(text_channel, bot)
-                    print(f"アーカイブ完了: {before.channel.name}のテキストチャンネル履歴を保存しました")
+                    print(f"アーカイブ完了: {before.channel.name}のボイスチャット履歴を保存しました")
+                    # 常設ボイスでない場合（一時的なボイス）はテキストチャンネルも削除
+                    if "フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name:
+                        await text_channel.delete()
+                        print(f"一時的ボイスチャンネル{before.channel.name}に紐づくテキストチャンネルを削除しました")
+                    # 常設ボイスの場合はメッセージだけ削除して次回に備える
+                    else:
+                        await text_channel.purge()
+                        print(f"常設ボイスチャンネル{before.channel.name}のテキストチャンネルのメッセージをクリアしました")
                     # アーカイブ完了後、次回会話用にテキストチャンネルのIDをマップから削除して再アーカイブ可能に
                     if text_channel.id in archived_channel_ids:
                         archived_channel_ids.remove(text_channel.id)
@@ -127,10 +135,21 @@ def setup_voice_events(bot):
             
             if text_channel and text_channel.id not in archived_channel_ids:
                 archived_channel_ids.add(text_channel.id)
-                print(f"ボイスチャンネル{channel.name}が削除されたので、標準テキストチャンネル{text_channel.name}をアーカイブ開始")
+                print(f"ボイスチャンネル{channel.name}が削除されたので、ボイス紐付きテキストチャンネル{text_channel.name}をアーカイブ開始")
                 # メッセージ履歴をPDFにアーカイブ
                 await archive_text_channel_history(text_channel, bot)
-                print(f"アーカイブ完了: {channel.name}のテキストチャンネル履歴を保存しました")
+                print(f"アーカイブ完了: {channel.name}のボイスチャット履歴を保存しました")
+                # 常設ボイスでない場合（一時的なボイス）はテキストチャンネルも削除
+                if "フリー" in channel.name or "まったり" in channel.name or "一時的" in channel.name:
+                    await text_channel.delete()
+                    print(f"一時的ボイスチャンネル{channel.name}に紐づくテキストチャンネルを削除しました")
+                # 常設ボイスの場合はメッセージだけ削除して次回に備える
+                else:
+                    await text_channel.purge()
+                    print(f"常設ボイスチャンネル{channel.name}のテキストチャンネルのメッセージをクリアしました")
+                # アーカイブ完了後、次回会話用にテキストチャンネルのIDをマップから削除して再アーカイブ可能に
+                if text_channel.id in archived_channel_ids:
+                    archived_channel_ids.remove(text_channel.id)
 
     # Bot起動時に全サーバーの特殊チャンネルの権限を一括設定
     @bot.event
