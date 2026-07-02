@@ -42,6 +42,7 @@ jobs:
     - name: Start Bot
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        ARCHIVE_CHANNEL_ID: "1521780512795132015"
       run: |
         cd $GITHUB_WORKSPACE
         ls -la # ディレクトリ内容を確認（デバッグ用）
