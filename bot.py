@@ -3,7 +3,6 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import asyncio
 import discord
-from discord.ext import commands
 from aiohttp import web
 from utils import (
     setup_logger,
@@ -38,8 +37,8 @@ PRIVATE_THREAD_ALLOWED_CHANNEL_IDS = get_ids_from_env('PRIVATE_THREAD_ALLOWED_CH
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
-# コマンドは使用しないのでcommand_prefixは空文字列
-bot = commands.Bot(command_prefix='', intents=intents)
+# コマンド機能を使わないため、基本的なdiscord.Clientを使用
+bot = discord.Client(intents=intents)
 
 # 個人ロールを作成・付与する非同期関数（並列処理用）
 async def process_member(member, guild):
