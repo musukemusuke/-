@@ -66,8 +66,10 @@ def setup_voice_events(bot):
                 print(f"[デバッグ] {before.channel.name} の人間メンバーが0になったのでアーカイブ処理を開始")
                 # ボイスチャンネルに紐づく標準テキストチャンネルを検索（discord.pyバージョン互換性対策）
                 text_channel = None
-                # サーバー全体の全テキストチャンネルから検索（カテゴリが分かれていても検出可能）
+                # サーバー全体の全テキストチャンネルから検索（カテゴリーが分かれていても検出可能）
                 all_text_channels = [c for c in before.channel.guild.text_channels]
+                all_categories = [c.name for c in before.channel.guild.categories]
+                print(f"[デバッグ] サーバー内の全カテゴリー一覧: {all_categories}")
                 print(f"[デバッグ] サーバー内の全テキストチャンネル一覧: {[c.name for c in all_text_channels]}")
                 # 全テキストチャンネルから、ボイスチャンネルに紐づくものを探す
                 for channel in all_text_channels:
@@ -81,7 +83,7 @@ def setup_voice_events(bot):
                 if not text_channel:
                     print(f"[デバッグ] voice_channel属性が見つからなかったので名前で検索開始")
                     for channel in all_text_channels:
-                        if channel.name == before.channel.name or channel.name.startswith(before.channel.name):
+                        if channel.name == before.channel.name or channel.name.startswith(before.channel.name) or before.channel.name in channel.name:
                             text_channel = channel
                             print(f"[デバッグ] 名前一致でテキストチャンネルを発見: {text_channel.name}")
                             break
@@ -128,7 +130,7 @@ def setup_voice_events(bot):
             # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
             if not text_channel:
                 for category_channel in all_text_channels:
-                    if category_channel.name == channel.name or category_channel.name.startswith(channel.name):
+                    if category_channel.name == channel.name or category_channel.name.startswith(channel.name) or channel.name in category_channel.name:
                         text_channel = category_channel
                         print(f"[デバッグ] 名前一致で削除ボイスのテキストチャンネルを発見: {text_channel.name}")
                         break
