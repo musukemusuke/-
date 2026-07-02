@@ -158,7 +158,27 @@ async def on_ready():
     guild_tasks = [process_guild(guild) for guild in bot.guilds]
     await asyncio.gather(*guild_tasks)
     
-    # 孤立した個人ロールのクリーンアップタスクを起動
+    # 起動時に一度だけ孤立した個人ロールを即座にクリーンアップ
+    for guild in bot.guilds:
+        logger.info(f"起動時クリーンアップ: ギルド {guild.name} の孤立ロールを検索します")
+        all_member_role_ids = set()
+        for member in guild.members:
+            if not member.bot:
+                for role in member.roles:
+                    all_member_role_ids.add(role.id)
+        # 孤立したロールを削除
+        deleted_count = 0
+        for role in guild.roles:
+            if role.id not in all_member_role_ids and role < guild.me.top_role and role != guild.default_role:
+                try:
+                    await role.delete(reason="Bot起動時のクリーンアップで孤立ロールを削除")
+                    logger.info(f"起動時クリーンアップでロール {role.name} を削除しました")
+                    deleted_count += 1
+                except Exception as e:
+                    logger.error(f"起動時クリーンアップでの削除に失敗: {role.name}: {e}")
+        logger.info(f"起動時クリーンアップ完了: {deleted_count}個の孤立ロールを削除しました")
+    
+    # 孤立した個人ロールの定期クリーンアップタスクを起動
     bot.loop.create_task(cleanup_orphaned_roles())
 
 @bot.event
@@ -230,49 +250,6 @@ async def on_member_join(member):
             # 通常チャンネルは閲覧も送信も可
             await set_permissions_with_retry(channel, assigned_role, {"view_channel": True, "send_messages": True}, logger=logger)
         logger.debug(f"チャンネル {channel.name} で {assigned_role.name} の権限を設定しました。")
-
-@bot.event
-async def on_member_remove(member):
-    # 絶対にイベントが発火していることを確認するため、最初に強制ログ出力
-    logger.critical(f"!!! on_member_removeイベント発生!!! 退出メンバー: {member.display_name}, ID: {member.id}")
-    # Botは処理をスキップ
-    if member.bot:
-        logger.info("Botメンバーのため処理をスキップします")
-        return
-    guild = member.guild
-    member_display_name = member.display_name
-    logger.info(f"メンバー {member_display_name} が退出したため、個人ロールの削除処理を開始します。")
-    
-    # Botのロール位置を事前にログ出力して権限不足を事前検知
-    logger.info(f"Botの最上位ロール: {guild.me.top_role.name}, 位置: {guild.me.top_role.position}")
-    for role in member.roles:
-        if role != guild.default_role:
-            logger.info(f"メンバーが保持していたロール: {role.name}, 位置: {role.position}")
-    
-    # メンバーが退出する直前に持っていた全ての個人ロールを、タイミングの問題が起きる前に即座に削除
-    # ニックネームが変更されていても、member.rolesに存在するロールは全て削除する
-    for role in member.roles:
-        if role < guild.me.top_role and role != guild.default_role:
-            try:
-                await role.delete(reason=f"メンバー {member_display_name} が退出したため個人ロールを削除")
-                logger.info(f"メンバー {member_display_name} が退出したため、保持していたロール {role.name} を削除しました。")
-            except discord.Forbidden:
-                logger.error(f"権限不足でロール {role.name} を削除できません。Botのロールがサーバー設定で最上位に配置されているか確認してください。")
-            except Exception as e:
-                logger.error(f"ロール {role.name} の削除に予期せぬ失敗: {type(e).__name__}: {str(e)}")
-    
-    # 万が一メンバーのrolesから漏れていても、ギルド内のBotより下のロールで、メンバーの過去の名前に関連するロールを検索して削除
-    # 全てのBotより下のロールを走査し、どんな名前でも残っていないか確認
-    for role in guild.roles:
-        if role < guild.me.top_role and role != guild.default_role:
-            # どのメンバーもこのロールを持っていない孤立したロールを削除
-            has_holder = any(role in m.roles for m in guild.members if not m.bot)
-            if not has_holder:
-                try:
-                    await role.delete(reason=f"メンバー {member_display_name} 退出時のクリーンアップで孤立ロール {role.name} を削除")
-                    logger.info(f"退出処理に伴うクリーンアップで、孤立していたロール {role.name} を削除しました。")
-                except Exception as e:
-                    logger.debug(f"孤立ロール {role.name} の削除に失敗: {e}")
 
 @bot.event
 async def on_member_update(before, after):

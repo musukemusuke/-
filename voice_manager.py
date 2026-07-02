@@ -209,10 +209,45 @@ def setup_voice_events(bot):
             await asyncio.sleep(1)
             await setup_voice_text_channel_permissions(channel.guild)
 
-    # メンバーがサーバーから脱退したときにキャッシュと全チャンネルの権限をクリーンアップ
+    # メンバーがサーバーから脱退したときにキャッシュと全チャンネルの権限をクリーンアップ + 個人ロールを削除
     @bot.event
     async def on_member_remove(member):
         logger.info(f"メンバー{member.display_name}がサーバーから脱退しました。権限とキャッシュをクリーンアップします。")
+        # 個人ロール削除処理を統合して実行
+        try:
+            if member.bot:
+                logger.info("Botメンバーのためロール削除処理をスキップします")
+                return
+            guild = member.guild
+            # Botのロール位置をログ出力
+            logger.info(f"Botの最上位ロール: {guild.me.top_role.name}, 位置: {guild.me.top_role.position}")
+            for role in member.roles:
+                if role != guild.default_role:
+                    logger.info(f"メンバーが保持していたロール: {role.name}, 位置: {role.position}")
+            
+            # メンバーが保持していた全ての個人ロールを即座に削除
+            for role in member.roles:
+                if role < guild.me.top_role and role != guild.default_role:
+                    try:
+                        await role.delete(reason=f"メンバー {member.display_name} が退出したため個人ロールを削除")
+                        logger.info(f"メンバー {member.display_name} が退出したため、保持していたロール {role.name} を削除しました。")
+                    except discord.Forbidden:
+                        logger.error(f"権限不足でロール {role.name} を削除できません。Botのロールがサーバー設定で最上位に配置されているか確認してください。")
+                    except Exception as e:
+                        logger.error(f"ロール {role.name} の削除に予期せぬ失敗: {type(e).__name__}: {str(e)}")
+            
+            # 孤立したロールもこのタイミングで削除
+            for role in guild.roles:
+                if role < guild.me.top_role and role != guild.default_role:
+                    has_holder = any(role in m.roles for m in guild.members if not m.bot)
+                    if not has_holder:
+                        try:
+                            await role.delete(reason=f"メンバー {member.display_name} 退出時のクリーンアップで孤立ロール {role.name} を削除")
+                            logger.info(f"退出処理に伴うクリーンアップで、孤立していたロール {role.name} を削除しました。")
+                        except Exception as e:
+                            logger.debug(f"孤立ロール {role.name} の削除に失敗: {e}")
+        except Exception as e:
+            logger.critical(f"on_member_remove内で個人ロール削除処理中にエラー発生: {type(e).__name__}: {str(e)}")
         
         # サーバー内の全てのチャンネルから退出メンバーの権限を削除
         for channel in member.guild.channels:
