@@ -4,31 +4,26 @@ from archive import archive_text_channel_history
 
 # アーカイブ処理済みのテキストチャンネルIDを保存するセット（重複アーカイブ防止）
 archived_channel_ids = set()
+# 特殊チャンネルの処理済みIDをキャッシュ（重複処理防止）
+processed_special_channels = set()
 
 # 休止ボイスチャンネルIDリスト
 IGNORE_VOICE_CHANNEL_IDS = [
     # 休止ボイスチャンネルのIDをここに記載
 ]
 
+# 常設ボイスチャンネルの名前ホワイトリスト（このリストに含まれるチャンネルのみメッセージクリアを実行）
+PERMANENT_VOICE_NAMES = ["フリー", "まったり"]
+
 def setup_voice_events(bot):
     # 休止チャンネルと個室作成チャンネルのテキストチャットを使用不可にする初期化処理
     async def disable_chat_for_special_channels(guild):
-        for voice_channel in guild.voice_channels:
-            if "休止" in voice_channel.name or "個室を作る" in voice_channel.name:
-                # 紐づくテキストチャンネルを検索（サーバー全体から検索）
-                text_channel = None
-                all_text_channels = [c for c in guild.text_channels]
-                for channel in all_text_channels:
-                    if hasattr(channel, 'voice_channel') and channel.voice_channel == voice_channel:
-                        text_channel = channel
-                        break
-                if not text_channel:
-                    for channel in all_text_channels:
-                        if channel.name == voice_channel.name or channel.name.startswith(voice_channel.name):
-                            text_channel = channel
-                            break
-                # テキストチャンネルが存在すればeveryoneの送信権限を無効化
-                if text_channel:
+        # Discordのvoice_channel属性で直接検索することでループ回数を削減
+        for text_channel in guild.text_channels:
+            if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel:
+                voice_channel = text_channel.voice_channel
+                if voice_channel.id not in processed_special_channels and ("休止" in voice_channel.name or "個室を作る" in voice_channel.name):
+                    processed_special_channels.add(voice_channel.id)
                     await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=True)
                     print(f"特殊チャンネル{voice_channel.name}のテキストチャット送信権限を無効化しました")
 
@@ -43,10 +38,9 @@ def setup_voice_events(bot):
             if before.channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in before.channel.name or "個室を作る" in before.channel.name:
                 return
             
-            # ボイスチャンネルに残っている人間メンバーを確認
-            remaining_humans = [m for m in before.channel.members if not m.bot]
-            print(f"[デバッグ] {before.channel.name} 退出検知: 残りの人間メンバー数={len(remaining_humans)}, メンバー一覧={[m.display_name for m in remaining_humans]}")
-            if len(remaining_humans) == 0:
+            # ボイスチャンネルに残っている人間メンバーを確認（ジェネレータで効率化）
+            remaining_humans = sum(1 for m in before.channel.members if not m.bot)
+            if remaining_humans == 0:
                 print(f"[デバッグ] {before.channel.name} の人間メンバーが0になったのでアーカイブ処理を開始")
                 # ボイスチャンネル自体を対象に、ボイスチャンネル内のチャットをアーカイブ
                 target_channel = before.channel
@@ -57,8 +51,8 @@ def setup_voice_events(bot):
                         # メッセージ履歴をPDFにアーカイブ（ボイスチャンネルでもhistory()が使用可能）
                         await archive_text_channel_history(target_channel, bot)
                         print(f"アーカイブ完了: {before.channel.name}のボイスチャット履歴を保存しました")
-                        # 常設ボイスの場合はメッセージだけ削除して次回に備える
-                        if not ("フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name or "musuke" in before.channel.name):
+                        # 常設ボイスの場合はメッセージだけ削除して次回に備える（ホワイトリストで判定）
+                        if any(name in before.channel.name for name in PERMANENT_VOICE_NAMES):
                             try:
                                 # チャンネルがまだ存在するか確認してからpurgeを実行
                                 channel_exists = any(c.id == target_channel.id for c in target_channel.guild.voice_channels)
