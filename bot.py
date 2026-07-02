@@ -234,16 +234,28 @@ async def on_member_remove(member):
     if member.bot:
         return
     guild = member.guild
-    # メンバーが現在持っていたロールの中から個人ロールを検索して削除
-    for role in member.roles:
-        # メンバーが持っていたロールの名前が、過去のニックネームと一致する可能性もあるので、
-        # メンバー自身が持っていたロールを対象に削除
-        if role < guild.me.top_role and role != guild.default_role:
+    # ギルド内からメンバーの個人ロールを検索して削除
+    # Discordはメンバー退出後にmember.rolesをクリアする場合があるため、ギルドのロール一覧から直接検索
+    member_display_name = member.display_name
+    logger.info(f"メンバー {member_display_name} が退出したため、個人ロールの検索を開始します。")
+    
+    for role in guild.roles:
+        # Botのロールより下にあるロール、かつメンバーのニックネームと同じ名前のロールを削除
+        if role.name == member_display_name and role < guild.me.top_role and role != guild.default_role:
             try:
-                await role.delete(reason=f"メンバー {member.display_name} が退出したため個人ロールを削除")
-                logger.info(f"メンバー {member.display_name} が退出したため、ロール {role.name} を削除しました。")
+                await role.delete(reason=f"メンバー {member_display_name} が退出したため個人ロールを削除")
+                logger.info(f"メンバー {member_display_name} が退出したため、ロール {role.name} を削除しました。")
+                break
             except Exception as e:
                 logger.error(f"ロール {role.name} の削除に失敗しました: {e}")
+    # 念のため、メンバーが退出前に持っていたロールも確認して削除（二重チェック）
+    for role in member.roles:
+        if role < guild.me.top_role and role != guild.default_role:
+            try:
+                await role.delete(reason=f"メンバー {member_display_name} が退出したため補足的に個人ロールを削除")
+                logger.info(f"メンバー {member_display_name} の補足処理で、ロール {role.name} を削除しました。")
+            except Exception as e:
+                logger.debug(f"補足処理でのロール削除に失敗（既に削除済みの可能性があります）: {e}")
 
 @bot.event
 async def on_member_update(before, after):
