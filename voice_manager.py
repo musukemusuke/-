@@ -18,16 +18,27 @@ PERMANENT_VOICE_NAMES = ["フリー", "まったり"]
 def setup_voice_events(bot):
     # 全てのボイスチャンネルのテキストチャットの権限を設定する初期化処理
     async def setup_voice_text_channel_permissions(guild):
-        # Discordのvoice_channel属性で直接検索することでループ回数を削減
-        for text_channel in guild.text_channels:
-            if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel:
-                voice_channel = text_channel.voice_channel
+        # ボイスチャンネルごとに紐づくテキストチャット（スレッド含む）を検索
+        for voice_channel in guild.voice_channels:
+            # ボイスチャンネルに紐づくテキストチャネル/スレッドを全て取得
+            linked_channels = []
+            # 通常のtext_channelの場合
+            for text_channel in guild.text_channels:
+                if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == voice_channel.id:
+                    linked_channels.append(text_channel)
+            # スレッドの場合（Discordの新しいボイスチャンネルはスレッドとして作成されることが多い）
+            for thread in guild.threads:
+                if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == voice_channel.id:
+                    linked_channels.append(thread)
+            
+            # 紐づくチャンネルが存在した場合に権限を設定
+            for text_channel in linked_channels:
                 # まず全てのボイスチャンネルのテキストチャットで、デフォルトロールの送信権限をオフに
                 await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=False)
                 # 現在ボイスチャンネルに参加しているメンバーには個別に送信・閲覧権限を付与
                 for member in voice_channel.members:
                     await text_channel.set_permissions(member, send_messages=True, read_messages=True)
-                print(f"ボイスチャンネル{voice_channel.name}のテキストチャット権限を設定しました（参加者限定）")
+                print(f"ボイスチャンネル{voice_channel.name}のテキストチャット({text_channel.name})の権限を設定しました（参加者限定）")
                 
                 # 特殊チャンネル（休止・個室を作る）は更に送信不可に強化
                 if voice_channel.id not in processed_special_channels and ("休止" in voice_channel.name or "個室を作る" in voice_channel.name):
@@ -41,21 +52,35 @@ def setup_voice_events(bot):
     async def on_voice_state_update(member, before, after):
         # 新しくボイスチャンネルに参加した場合、そのチャンネルのテキストチャット権限を付与
         if after.channel is not None:
-            # 参加したボイスチャンネルに紐づくテキストチャンネルを検索
+            # 参加したボイスチャンネルに紐づくテキストチャンネル/スレッドを検索
+            linked_channels = []
             for text_channel in after.channel.guild.text_channels:
                 if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == after.channel.id:
-                    # 参加したメンバーに送信・閲覧権限を付与
-                    await text_channel.set_permissions(member, send_messages=True, read_messages=True)
-                    print(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット権限を付与しました")
+                    linked_channels.append(text_channel)
+            for thread in after.channel.guild.threads:
+                if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == after.channel.id:
+                    linked_channels.append(thread)
+            
+            # 紐づく全てのチャンネルに権限を付与
+            for text_channel in linked_channels:
+                await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                print(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
         
         # ボイスチャンネルから退出した場合、そのチャンネルのテキストチャット権限を削除
         if before.channel is not None and after.channel != before.channel:
-            # 退出したボイスチャンネルに紐づくテキストチャンネルを検索
+            # 退出したボイスチャンネルに紐づくテキストチャンネル/スレッドを検索
+            linked_channels = []
             for text_channel in before.channel.guild.text_channels:
                 if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == before.channel.id:
-                    # 退出したメンバーの送信・閲覧権限を削除
-                    await text_channel.set_permissions(member, send_messages=False, read_messages=False)
-                    print(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット権限を削除しました")
+                    linked_channels.append(text_channel)
+            for thread in before.channel.guild.threads:
+                if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == before.channel.id:
+                    linked_channels.append(thread)
+            
+            # 紐づく全てのチャンネルから権限を削除
+            for text_channel in linked_channels:
+                await text_channel.set_permissions(member, send_messages=False, read_messages=False)
+                print(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット({text_channel.name})の権限を削除しました")
         
         # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
         if after.channel is None and before.channel is not None:
