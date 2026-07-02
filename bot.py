@@ -202,19 +202,21 @@ async def on_member_join(member):
         # 作成したロール数のメトリクスをインクリメント
         metrics['roles_created'] += 1
         logger.info(f"メンバー {member.display_name} に個人ロールを付与しました。")
+        assigned_role = new_role
     else:
         await member.add_roles(existing_role)
         logger.info(f"既存の個人ロール{role_name}を{member.display_name}に付与しました。")
+        assigned_role = existing_role
 
     # すべてのチャンネルで閲覧権限をリトライ付きで設定
     for channel in guild.channels:
         if channel.id in read_only_channel_ids:
             # 読み取り専用チャンネルは閲覧可、送信不可
-            await set_permissions_with_retry(channel, new_role, {"view_channel": True, "send_messages": False}, logger=logger)
+            await set_permissions_with_retry(channel, assigned_role, {"view_channel": True, "send_messages": False}, logger=logger)
         else:
             # 通常チャンネルは閲覧も送信も可
-            await set_permissions_with_retry(channel, new_role, {"view_channel": True, "send_messages": True}, logger=logger)
-        logger.debug(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
+            await set_permissions_with_retry(channel, assigned_role, {"view_channel": True, "send_messages": True}, logger=logger)
+        logger.debug(f"チャンネル {channel.name} で {assigned_role.name} の権限を設定しました。")
 
 @bot.event
 async def on_member_remove(member):
