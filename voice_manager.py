@@ -112,33 +112,37 @@ def setup_voice_events(bot):
                     await set_permissions_with_retry(after.channel, member, {"send_messages": True})
                     await set_permissions_with_retry(text_channel, member, {"send_messages": True, "read_messages": True})
                     logger.info(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
-         
-         # ボイスチャンネルから退出した場合、そのチャンネルのテキストチャット権限を削除
-         if before.channel is not None and after.channel != before.channel:
-             # 退出したボイスチャンネルに紐づくテキストチャンネル/スレッドを検索
-             linked_channels = []
-             for text_channel in before.channel.guild.text_channels:
-                 if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == before.channel.id:
-                     linked_channels.append(text_channel)
-             for thread in before.channel.guild.threads:
-                 if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == before.channel.id:
-                     linked_channels.append(thread)
-             
-             # 紐づく全てのチャンネルとボイスチャンネル本体から権限を削除（個人ロールでもメンバー単位の権限が優先されるよう明示的に設定）
-             for text_channel in linked_channels:
-                 # 現在の権限を確認して、既に正しい場合はスキップ
-                 text_perms = text_channel.permissions_for(member)
-                 voice_perms = before.channel.permissions_for(member)
-                 if text_perms.send_messages == False and text_perms.read_messages == False and voice_perms.send_messages == False:
-                     continue
-                 # 権限を削除（エラーハンドリング付き）
-                 try:
-                     await set_permissions_with_retry(before.channel, member, {"send_messages": False})
-                     await set_permissions_with_retry(text_channel, member, {"send_messages": False, "read_messages": False})
-                     logger.info(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット({text_channel.name})の権限を削除しました")
-         
-         # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
-         if after.channel is None and before.channel is not None:
+                except Exception as e:
+                    logger.error(f"ボイスチャンネル参加時の権限設定でエラーが発生: {e}")
+
+        # ボイスチャンネルから退出した場合、そのチャンネルのテキストチャット権限を削除
+        if before.channel is not None and after.channel != before.channel:
+            # 退出したボイスチャンネルに紐づくテキストチャンネル/スレッドを検索
+            linked_channels = []
+            for text_channel in before.channel.guild.text_channels:
+                if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == before.channel.id:
+                    linked_channels.append(text_channel)
+            for thread in before.channel.guild.threads:
+                if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == before.channel.id:
+                    linked_channels.append(thread)
+            
+            # 紐づく全てのチャンネルとボイスチャンネル本体から権限を削除（個人ロールでもメンバー単位の権限が優先されるよう明示的に設定）
+            for text_channel in linked_channels:
+                # 現在の権限を確認して、既に正しい場合はスキップ
+                text_perms = text_channel.permissions_for(member)
+                voice_perms = before.channel.permissions_for(member)
+                if text_perms.send_messages == False and text_perms.read_messages == False and voice_perms.send_messages == False:
+                    continue
+                # 権限を削除（エラーハンドリング付き）
+                try:
+                    await set_permissions_with_retry(before.channel, member, {"send_messages": False})
+                    await set_permissions_with_retry(text_channel, member, {"send_messages": False, "read_messages": False})
+                    logger.info(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット({text_channel.name})の権限を削除しました")
+                except Exception as e:
+                    logger.error(f"ボイスチャンネル退出時の権限削除でエラーが発生: {e}")
+
+        # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
+        if after.channel is None and before.channel is not None:
              # 休止チャンネルはアーカイブ処理をスキップ
              if before.channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in before.channel.name or "個室を作る" in before.channel.name:
                  return
