@@ -16,12 +16,20 @@ IGNORE_VOICE_CHANNEL_IDS = [
 PERMANENT_VOICE_NAMES = ["フリー", "まったり"]
 
 def setup_voice_events(bot):
-    # 休止チャンネルと個室作成チャンネルのテキストチャットを使用不可にする初期化処理
-    async def disable_chat_for_special_channels(guild):
+    # 全てのボイスチャンネルのテキストチャットの権限を設定する初期化処理
+    async def setup_voice_text_channel_permissions(guild):
         # Discordのvoice_channel属性で直接検索することでループ回数を削減
         for text_channel in guild.text_channels:
             if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel:
                 voice_channel = text_channel.voice_channel
+                # まず全てのボイスチャンネルのテキストチャットで、デフォルトロールの送信権限をオフに
+                await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=False)
+                # 現在ボイスチャンネルに参加しているメンバーには個別に送信・閲覧権限を付与
+                for member in voice_channel.members:
+                    await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                print(f"ボイスチャンネル{voice_channel.name}のテキストチャット権限を設定しました（参加者限定）")
+                
+                # 特殊チャンネル（休止・個室を作る）は更に送信不可に強化
                 if voice_channel.id not in processed_special_channels and ("休止" in voice_channel.name or "個室を作る" in voice_channel.name):
                     processed_special_channels.add(voice_channel.id)
                     await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=True)
@@ -31,7 +39,24 @@ def setup_voice_events(bot):
     # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
     @bot.event
     async def on_voice_state_update(member, before, after):
-        # 参加時の重複権限設定処理を削除（Bot起動時に1回だけ実行済み）
+        # 新しくボイスチャンネルに参加した場合、そのチャンネルのテキストチャット権限を付与
+        if after.channel is not None:
+            # 参加したボイスチャンネルに紐づくテキストチャンネルを検索
+            for text_channel in after.channel.guild.text_channels:
+                if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == after.channel.id:
+                    # 参加したメンバーに送信・閲覧権限を付与
+                    await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                    print(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット権限を付与しました")
+        
+        # ボイスチャンネルから退出した場合、そのチャンネルのテキストチャット権限を削除
+        if before.channel is not None and after.channel != before.channel:
+            # 退出したボイスチャンネルに紐づくテキストチャンネルを検索
+            for text_channel in before.channel.guild.text_channels:
+                if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == before.channel.id:
+                    # 退出したメンバーの送信・閲覧権限を削除
+                    await text_channel.set_permissions(member, send_messages=False, read_messages=False)
+                    print(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット権限を削除しました")
+        
         # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
         if after.channel is None and before.channel is not None:
             # 休止チャンネルはアーカイブ処理をスキップ
@@ -91,10 +116,10 @@ def setup_voice_events(bot):
                     if channel.id in archived_channel_ids:
                         archived_channel_ids.remove(channel.id)
 
-    # Bot起動時に全サーバーの特殊チャンネルの権限を一括設定
+    # Bot起動時に全サーバーのボイスチャンネルの権限を一括設定
     @bot.event
     async def on_ready():
-        print("Botが起動しました。特殊チャンネルのテキストチャット権限を設定します...")
+        print("Botが起動しました。全ボイスチャンネルのテキストチャット権限を設定します...")
         for guild in bot.guilds:
-            await disable_chat_for_special_channels(guild)
-        print("全ての特殊チャンネルの権限設定が完了しました。")
+            await setup_voice_text_channel_permissions(guild)
+        print("全てのボイスチャンネルの権限設定が完了しました。")
