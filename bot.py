@@ -224,14 +224,16 @@ async def on_member_remove(member):
     if member.bot:
         return
     guild = member.guild
-    # 退出したメンバーの名前と一致するロールを検索して削除
-    for role in guild.roles:
-        if role.name == member.display_name:
-            # Bot自身より下位のロールのみ削除可能（権限の問題を回避）
-            if role < guild.me.top_role:
+    # メンバーが現在持っていたロールの中から個人ロールを検索して削除
+    for role in member.roles:
+        # メンバーが持っていたロールの名前が、過去のニックネームと一致する可能性もあるので、
+        # メンバー自身が持っていたロールを対象に削除
+        if role < guild.me.top_role and role != guild.default_role:
+            try:
                 await role.delete(reason=f"メンバー {member.display_name} が退出したため個人ロールを削除")
                 logger.info(f"メンバー {member.display_name} が退出したため、ロール {role.name} を削除しました。")
-                break
+            except Exception as e:
+                logger.error(f"ロール {role.name} の削除に失敗しました: {e}")
 
 @bot.event
 async def on_member_update(before, after):
