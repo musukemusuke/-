@@ -74,7 +74,7 @@ def setup_voice_events(bot):
                         await archive_text_channel_history(target_channel, bot)
                         print(f"アーカイブ完了: {before.channel.name}のボイスチャット履歴を保存しました")
                         # 常設ボイスの場合はメッセージだけ削除して次回に備える
-                        if not ("フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name):
+                        if not ("フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name or "musuke" in before.channel.name):
                             try:
                                 # チャンネルがまだ存在するか確認してからpurgeを実行
                                 channel_exists = any(c.id == target_channel.id for c in target_channel.guild.voice_channels)
