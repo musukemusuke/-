@@ -43,4 +43,4 @@ jobs:
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
       run: |
-        python -u bot.py
+        PYTHONPATH=. python -u bot.py
