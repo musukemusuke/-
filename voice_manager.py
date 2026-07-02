@@ -72,13 +72,33 @@ def setup_voice_events(bot):
                 print(f"[デバッグ] サーバー内の全カテゴリー一覧: {all_categories}")
                 print(f"[デバッグ] サーバー内の全テキストチャンネル一覧: {[c.name for c in all_text_channels]}")
                 # 全テキストチャンネルから、ボイスチャンネルに紐づくものを探す
-                for channel in all_text_channels:
-                    # Discord標準のボイス専用テキストチャンネルは、元のボイスチャンネルの名前を基に作成され、かつvoice_channel属性で紐付けられている
-                    print(f"[デバッグ] チェック中: {channel.name}, hasattr(voice_channel)={hasattr(channel, 'voice_channel')}")
-                    if hasattr(channel, 'voice_channel') and channel.voice_channel == before.channel:
-                        text_channel = channel
-                        print(f"[デバッグ] voice_channel属性でテキストチャンネルを発見: {text_channel.name}")
+                # 🔊カテゴリー内のテキストチャンネルを優先的に検索
+                voice_category = None
+                for cat in before.channel.guild.categories:
+                    if cat.name == "🔊":
+                        voice_category = cat
                         break
+                if voice_category:
+                    print(f"[デバッグ] 🔊カテゴリー内のテキストチャンネル: {[c.name for c in voice_category.text_channels]}")
+                    for channel in voice_category.text_channels:
+                        if hasattr(channel, 'voice_channel') and channel.voice_channel == before.channel:
+                            text_channel = channel
+                            print(f"[デバッグ] 🔊カテゴリー内でvoice_channel属性でテキストチャンネルを発見: {text_channel.name}")
+                            break
+                    if not text_channel:
+                        for channel in voice_category.text_channels:
+                            if channel.name == before.channel.name or channel.name.startswith(before.channel.name) or before.channel.name in channel.name:
+                                text_channel = channel
+                                print(f"[デバッグ] 🔊カテゴリー内で名前一致でテキストチャンネルを発見: {text_channel.name}")
+                                break
+                # カテゴリー検索で見つからなかった場合、全体から検索
+                if not text_channel:
+                    for channel in all_text_channels:
+                        print(f"[デバッグ] チェック中: {channel.name}, hasattr(voice_channel)={hasattr(channel, 'voice_channel')}")
+                        if hasattr(channel, 'voice_channel') and channel.voice_channel == before.channel:
+                            text_channel = channel
+                            print(f"[デバッグ] voice_channel属性でテキストチャンネルを発見: {text_channel.name}")
+                            break
                 # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
                 if not text_channel:
                     print(f"[デバッグ] voice_channel属性が見つからなかったので名前で検索開始")
@@ -121,12 +141,32 @@ def setup_voice_events(bot):
             # サーバー全体の全テキストチャンネルから検索（カテゴリが分かれていても検出可能）
             all_text_channels = [c for c in channel.guild.text_channels]
             print(f"[デバッグ] 削除されたボイスチャンネル{channel.name}の検索: サーバー内全テキストチャンネル={[c.name for c in all_text_channels]}")
-            # 全テキストチャンネルから、ボイスチャンネルに紐づくものを探す
-            for category_channel in all_text_channels:
-                if hasattr(category_channel, 'voice_channel') and category_channel.voice_channel == channel:
-                    text_channel = category_channel
-                    print(f"[デバッグ] 削除ボイスに紐づくテキストチャンネルを発見: {text_channel.name}")
+            # 🔊カテゴリー内のテキストチャンネルを優先的に検索
+            voice_category = None
+            for cat in channel.guild.categories:
+                if cat.name == "🔊":
+                    voice_category = cat
                     break
+            if voice_category:
+                print(f"[デバッグ] 🔊カテゴリー内のテキストチャンネル: {[c.name for c in voice_category.text_channels]}")
+                for category_channel in voice_category.text_channels:
+                    if hasattr(category_channel, 'voice_channel') and category_channel.voice_channel == channel:
+                        text_channel = category_channel
+                        print(f"[デバッグ] 🔊カテゴリー内で削除ボイスに紐づくテキストチャンネルを発見: {text_channel.name}")
+                        break
+                if not text_channel:
+                    for category_channel in voice_category.text_channels:
+                        if category_channel.name == channel.name or category_channel.name.startswith(channel.name) or channel.name in category_channel.name:
+                            text_channel = category_channel
+                            print(f"[デバッグ] 🔊カテゴリー内で名前一致で削除ボイスのテキストチャンネルを発見: {text_channel.name}")
+                            break
+            # カテゴリー検索で見つからなかった場合、全体から検索
+            if not text_channel:
+                for category_channel in all_text_channels:
+                    if hasattr(category_channel, 'voice_channel') and category_channel.voice_channel == channel:
+                        text_channel = category_channel
+                        print(f"[デバッグ] 削除ボイスに紐づくテキストチャンネルを発見: {text_channel.name}")
+                        break
             # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
             if not text_channel:
                 for category_channel in all_text_channels:
