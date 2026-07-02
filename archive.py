@@ -234,15 +234,9 @@ async def archive_text_channel_history(channel, bot):
     
     # チャンネルのメッセージを全て取得（古い順に並べ替え）
     messages = []
-    # botのコマンドプレフィックスを取得（リストの場合も対応）
-    prefixes = bot.command_prefix
-    if not isinstance(prefixes, (list, tuple)):
-        prefixes = [prefixes]
-    
+    # Bot以外の全てのメッセージをアーカイブ（コマンド機能を使用しないため除外不要）
     async for message in channel.history(limit=None, oldest_first=True):
-        # botのメッセージ、およびユーザーが打ったコマンド（どのプレフィックスで始まるものも除外）
-        is_command = any(message.content.startswith(prefix) for prefix in prefixes)
-        if not message.author.bot and not is_command:
+        if not message.author.bot:
             messages.append(message)
     
     if not messages:
