@@ -157,6 +157,9 @@ async def on_ready():
     # 全ギルドの処理を並列実行
     guild_tasks = [process_guild(guild) for guild in bot.guilds]
     await asyncio.gather(*guild_tasks)
+    
+    # 孤立した個人ロールのクリーンアップタスクを起動
+    bot.loop.create_task(cleanup_orphaned_roles())
 
 @bot.event
 async def on_member_join(member):
@@ -356,8 +359,31 @@ async def on_message(message):
         await message.delete()
         print(f"メンバー {member.display_name} のプライベートスレッドを作成しました。")
         return
-    
-    # 通常のコマンドも処理できるようにする
+
+
+# 定期的に孤立した個人ロールをクリーンアップするタスク
+async def cleanup_orphaned_roles():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        for guild in bot.guilds:
+            logger.info(f"ギルド {guild.name} の孤立した個人ロールのクリーンアップを開始します。")
+            # 現在の全メンバーが持っているロールのIDを収集
+            all_member_role_ids = set()
+            for member in guild.members:
+                if not member.bot:
+                    for role in member.roles:
+                        all_member_role_ids.add(role.id)
+            
+            # Botより下のロールで、誰も持っていないロールを削除
+            for role in guild.roles:
+                if role.id not in all_member_role_ids and role < guild.me.top_role and role != guild.default_role:
+                    try:
+                        await role.delete(reason="誰も保持していない孤立した個人ロールのため削除")
+                        logger.info(f"孤立した個人ロール {role.name} を削除しました。")
+                    except Exception as e:
+                        logger.error(f"孤立ロール {role.name} の削除に失敗しました: {e}")
+        # 24時間ごとにクリーンアップを実行
+        await asyncio.sleep(86400)
 
 
 # ボイスイベントをセットアップ
