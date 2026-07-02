@@ -64,69 +64,21 @@ def setup_voice_events(bot):
             print(f"[デバッグ] {before.channel.name} 退出検知: 残りの人間メンバー数={len(remaining_humans)}, メンバー一覧={[m.display_name for m in remaining_humans]}")
             if len(remaining_humans) == 0:
                 print(f"[デバッグ] {before.channel.name} の人間メンバーが0になったのでアーカイブ処理を開始")
-                # ボイスチャンネルに紐づく標準テキストチャンネルを検索（discord.pyバージョン互換性対策）
-                text_channel = None
-                # サーバー全体の全テキストチャンネルから検索（カテゴリーが分かれていても検出可能）
-                all_text_channels = [c for c in before.channel.guild.text_channels]
-                all_categories = [c.name for c in before.channel.guild.categories]
-                print(f"[デバッグ] サーバー内の全カテゴリー一覧: {all_categories}")
-                print(f"[デバッグ] サーバー内の全テキストチャンネル一覧: {[c.name for c in all_text_channels]}")
-                # 全テキストチャンネルから、ボイスチャンネルに紐づくものを探す
-                # 🔊カテゴリー内のテキストチャンネルを優先的に検索
-                voice_category = None
-                for cat in before.channel.guild.categories:
-                    if cat.name == "🔊":
-                        voice_category = cat
-                        break
-                if voice_category:
-                    print(f"[デバッグ] 🔊カテゴリー内のテキストチャンネル: {[c.name for c in voice_category.text_channels]}")
-                    for channel in voice_category.text_channels:
-                        if hasattr(channel, 'voice_channel') and channel.voice_channel == before.channel:
-                            text_channel = channel
-                            print(f"[デバッグ] 🔊カテゴリー内でvoice_channel属性でテキストチャンネルを発見: {text_channel.name}")
-                            break
-                    if not text_channel:
-                        for channel in voice_category.text_channels:
-                            if channel.name == before.channel.name or channel.name.startswith(before.channel.name) or before.channel.name in channel.name:
-                                text_channel = channel
-                                print(f"[デバッグ] 🔊カテゴリー内で名前一致でテキストチャンネルを発見: {text_channel.name}")
-                                break
-                # カテゴリー検索で見つからなかった場合、全体から検索
-                if not text_channel:
-                    for channel in all_text_channels:
-                        print(f"[デバッグ] チェック中: {channel.name}, hasattr(voice_channel)={hasattr(channel, 'voice_channel')}")
-                        if hasattr(channel, 'voice_channel') and channel.voice_channel == before.channel:
-                            text_channel = channel
-                            print(f"[デバッグ] voice_channel属性でテキストチャンネルを発見: {text_channel.name}")
-                            break
-                # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
-                if not text_channel:
-                    print(f"[デバッグ] voice_channel属性が見つからなかったので名前で検索開始")
-                    for channel in all_text_channels:
-                        if channel.name == before.channel.name or channel.name.startswith(before.channel.name) or before.channel.name in channel.name:
-                            text_channel = channel
-                            print(f"[デバッグ] 名前一致でテキストチャンネルを発見: {text_channel.name}")
-                            break
-                if not text_channel:
-                    print(f"[エラー] {before.channel.name} に紐づくテキストチャンネルが見つかりませんでした。アーカイブ処理をスキップします。")
-                
-                if text_channel and text_channel.id not in archived_channel_ids:
-                    archived_channel_ids.add(text_channel.id)
-                    print(f"ボイスチャンネル{before.channel.name}に誰もいなくなったので、ボイス紐付きテキストチャンネル{text_channel.name}をアーカイブ開始")
-                    # メッセージ履歴をPDFにアーカイブ
-                    await archive_text_channel_history(text_channel, bot)
+                # ボイスチャンネル自体を対象に、ボイスチャンネル内のチャットをアーカイブ
+                target_channel = before.channel
+                if target_channel and target_channel.id not in archived_channel_ids:
+                    archived_channel_ids.add(target_channel.id)
+                    print(f"ボイスチャンネル{before.channel.name}に誰もいなくなったので、ボイスチャンネル本体のチャットをアーカイブ開始")
+                    # メッセージ履歴をPDFにアーカイブ（ボイスチャンネルでもhistory()が使用可能）
+                    await archive_text_channel_history(target_channel, bot)
                     print(f"アーカイブ完了: {before.channel.name}のボイスチャット履歴を保存しました")
-                    # 常設ボイスでない場合（一時的なボイス）はテキストチャンネルも削除
-                    if "フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name:
-                        await text_channel.delete()
-                        print(f"一時的ボイスチャンネル{before.channel.name}に紐づくテキストチャンネルを削除しました")
                     # 常設ボイスの場合はメッセージだけ削除して次回に備える
-                    else:
-                        await text_channel.purge()
-                        print(f"常設ボイスチャンネル{before.channel.name}のテキストチャンネルのメッセージをクリアしました")
-                    # アーカイブ完了後、次回会話用にテキストチャンネルのIDをマップから削除して再アーカイブ可能に
-                    if text_channel.id in archived_channel_ids:
-                        archived_channel_ids.remove(text_channel.id)
+                    if not ("フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name):
+                        await target_channel.purge()
+                        print(f"常設ボイスチャンネル{before.channel.name}のチャットメッセージをクリアしました")
+                    # アーカイブ完了後、次回会話用にIDをマップから削除して再アーカイブ可能に
+                    if target_channel.id in archived_channel_ids:
+                        archived_channel_ids.remove(target_channel.id)
 
     # ボイスチャンネルが削除されたときのイベント（一時的なボイスチャンネルの削除に対応）
     @bot.event
@@ -136,62 +88,14 @@ def setup_voice_events(bot):
             if channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in channel.name or "個室を作る" in channel.name:
                 return
             
-            # 削除されたボイスチャンネルに紐づく標準テキストチャンネルを検索（discord.pyバージョン互換性対策）
-            text_channel = None
-            # サーバー全体の全テキストチャンネルから検索（カテゴリが分かれていても検出可能）
-            all_text_channels = [c for c in channel.guild.text_channels]
-            print(f"[デバッグ] 削除されたボイスチャンネル{channel.name}の検索: サーバー内全テキストチャンネル={[c.name for c in all_text_channels]}")
-            # 🔊カテゴリー内のテキストチャンネルを優先的に検索
-            voice_category = None
-            for cat in channel.guild.categories:
-                if cat.name == "🔊":
-                    voice_category = cat
-                    break
-            if voice_category:
-                print(f"[デバッグ] 🔊カテゴリー内のテキストチャンネル: {[c.name for c in voice_category.text_channels]}")
-                for category_channel in voice_category.text_channels:
-                    if hasattr(category_channel, 'voice_channel') and category_channel.voice_channel == channel:
-                        text_channel = category_channel
-                        print(f"[デバッグ] 🔊カテゴリー内で削除ボイスに紐づくテキストチャンネルを発見: {text_channel.name}")
-                        break
-                if not text_channel:
-                    for category_channel in voice_category.text_channels:
-                        if category_channel.name == channel.name or category_channel.name.startswith(channel.name) or channel.name in category_channel.name:
-                            text_channel = category_channel
-                            print(f"[デバッグ] 🔊カテゴリー内で名前一致で削除ボイスのテキストチャンネルを発見: {text_channel.name}")
-                            break
-            # カテゴリー検索で見つからなかった場合、全体から検索
-            if not text_channel:
-                for category_channel in all_text_channels:
-                    if hasattr(category_channel, 'voice_channel') and category_channel.voice_channel == channel:
-                        text_channel = category_channel
-                        print(f"[デバッグ] 削除ボイスに紐づくテキストチャンネルを発見: {text_channel.name}")
-                        break
-            # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
-            if not text_channel:
-                for category_channel in all_text_channels:
-                    if category_channel.name == channel.name or category_channel.name.startswith(channel.name) or channel.name in category_channel.name:
-                        text_channel = category_channel
-                        print(f"[デバッグ] 名前一致で削除ボイスのテキストチャンネルを発見: {text_channel.name}")
-                        break
-            
-            if text_channel and text_channel.id not in archived_channel_ids:
-                archived_channel_ids.add(text_channel.id)
-                print(f"ボイスチャンネル{channel.name}が削除されたので、ボイス紐付きテキストチャンネル{text_channel.name}をアーカイブ開始")
-                # メッセージ履歴をPDFにアーカイブ
-                await archive_text_channel_history(text_channel, bot)
+            print(f"ボイスチャンネル{channel.name}が削除されたので、ボイスチャンネル本体のチャットをアーカイブ開始")
+            # ボイスチャンネル自体を対象にメッセージ履歴をPDFにアーカイブ
+            if channel.id not in archived_channel_ids:
+                archived_channel_ids.add(channel.id)
+                await archive_text_channel_history(channel, bot)
                 print(f"アーカイブ完了: {channel.name}のボイスチャット履歴を保存しました")
-                # 常設ボイスでない場合（一時的なボイス）はテキストチャンネルも削除
-                if "フリー" in channel.name or "まったり" in channel.name or "一時的" in channel.name:
-                    await text_channel.delete()
-                    print(f"一時的ボイスチャンネル{channel.name}に紐づくテキストチャンネルを削除しました")
-                # 常設ボイスの場合はメッセージだけ削除して次回に備える
-                else:
-                    await text_channel.purge()
-                    print(f"常設ボイスチャンネル{channel.name}のテキストチャンネルのメッセージをクリアしました")
-                # アーカイブ完了後、次回会話用にテキストチャンネルのIDをマップから削除して再アーカイブ可能に
-                if text_channel.id in archived_channel_ids:
-                    archived_channel_ids.remove(text_channel.id)
+                if channel.id in archived_channel_ids:
+                    archived_channel_ids.remove(channel.id)
 
     # Bot起動時に全サーバーの特殊チャンネルの権限を一括設定
     @bot.event
