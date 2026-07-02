@@ -43,6 +43,7 @@ jobs:
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
         ARCHIVE_CHANNEL_ID: "1521780512795132015"
+        READ_ONLY_CHANNEL_IDS: "1520972406234153081,1520972441151733911"
       run: |
         cd $GITHUB_WORKSPACE
         ls -la # ディレクトリ内容を確認（デバッグ用）
