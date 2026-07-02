@@ -319,6 +319,10 @@ async def on_member_update(before, after):
 
 @bot.event
 async def on_message(message):
+    # デバッグ用: 受信したメッセージの情報をログに出力
+    logger.info(f"メッセージ受信: チャンネルID={message.channel.id}, 作者={message.author.display_name}, 内容={message.content[:50]}")
+    logger.info(f"PRIVATE_THREAD_ALLOWED_CHANNEL_IDSの値: {PRIVATE_THREAD_ALLOWED_CHANNEL_IDS}")
+    
     # Botのメッセージは無視
     if message.author.bot:
         return
