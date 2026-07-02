@@ -22,22 +22,32 @@ def setup_voice_events(bot):
         for voice_channel in guild.voice_channels:
             # ボイスチャンネルに紐づくテキストチャネル/スレッドを全て取得
             linked_channels = []
-            # 通常のtext_channelの場合
+            # discord.pyのvoice_channel.threadsで直接紐づくスレッドを取得（Discord標準の仕様に対応）
+            if hasattr(voice_channel, 'threads'):
+                linked_channels.extend(voice_channel.threads)
+            # 通常のtext_channelの場合（旧仕様との互換性維持）
             for text_channel in guild.text_channels:
                 if hasattr(text_channel, 'voice_channel') and text_channel.voice_channel and text_channel.voice_channel.id == voice_channel.id:
                     linked_channels.append(text_channel)
-            # スレッドの場合（Discordの新しいボイスチャンネルはスレッドとして作成されることが多い）
+            # 念のためギルド全体のスレッドからも検索（稀なケースに対応）
             for thread in guild.threads:
-                if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == voice_channel.id:
+                if thread not in linked_channels and hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == voice_channel.id:
                     linked_channels.append(thread)
             
             # 紐づくチャンネルが存在した場合に権限を設定
             for text_channel in linked_channels:
-                # まず全てのボイスチャンネルのテキストチャットで、デフォルトロールの送信権限をオフに
+                # まず全てのボイスチャンネルのテキストチャットで、デフォルトロールの送信・閲覧権限をオフに
                 await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=False)
+                # 全てのメンバーの権限を一旦リセットしてから、参加者にだけ付与する
+                for member in text_channel.members:
+                    if not member.bot:
+                        await text_channel.set_permissions(member, send_messages=False, read_messages=False)
                 # 現在ボイスチャンネルに参加しているメンバーには個別に送信・閲覧権限を付与
                 for member in voice_channel.members:
-                    await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                    try:
+                        await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                    except Exception as e:
+                        print(f"[エラー] 初期化時にメンバー{member.display_name}の{text_channel.name}権限付与中にエラー: {e}")
                 print(f"ボイスチャンネル{voice_channel.name}のテキストチャット({text_channel.name})の権限を設定しました（参加者限定）")
                 
                 # 特殊チャンネル（休止・個室を作る）は更に送信不可に強化
@@ -63,8 +73,11 @@ def setup_voice_events(bot):
             
             # 紐づく全てのチャンネルに権限を付与
             for text_channel in linked_channels:
-                await text_channel.set_permissions(member, send_messages=True, read_messages=True)
-                print(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
+                try:
+                    await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                    print(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
+                except Exception as e:
+                    print(f"[エラー] メンバー{member.display_name}の{text_channel.name}権限付与中にエラー: {e}")
         
         # ボイスチャンネルから退出した場合、そのチャンネルのテキストチャット権限を削除
         if before.channel is not None and after.channel != before.channel:
@@ -79,8 +92,11 @@ def setup_voice_events(bot):
             
             # 紐づく全てのチャンネルから権限を削除
             for text_channel in linked_channels:
-                await text_channel.set_permissions(member, send_messages=False, read_messages=False)
-                print(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット({text_channel.name})の権限を削除しました")
+                try:
+                    await text_channel.set_permissions(member, send_messages=False, read_messages=False)
+                    print(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット({text_channel.name})の権限を削除しました")
+                except Exception as e:
+                    print(f"[エラー] メンバー{member.display_name}の{text_channel.name}権限削除中にエラー: {e}")
         
         # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
         if after.channel is None and before.channel is not None:
