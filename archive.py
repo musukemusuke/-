@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 ARCHIVE_CHANNEL_IDS = get_ids_from_env('ARCHIVE_CHANNEL_ID')
 ARCHIVE_CHANNEL_ID = ARCHIVE_CHANNEL_IDS[0] if ARCHIVE_CHANNEL_IDS else None
 if not ARCHIVE_CHANNEL_ID:
-    logger.error("ARCHIVE_CHANNEL_IDが環境変数に設定されていません！アーカイブ機能が動作しません。")
+    logger.warning("ARCHIVE_CHANNEL_IDが環境変数に設定されていません。アーカイブ機能は無効化されます。")
 
 # チャット履歴をPDFに生成し画像に変換する関数
 def create_chat_pdf(messages, channel_name):

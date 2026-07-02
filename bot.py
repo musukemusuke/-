@@ -18,12 +18,7 @@ logger = setup_logger(__name__)
 
 # 必須環境変数の一括バリデーション
 required_env_vars = [
-    'DISCORD_TOKEN',
-    'READ_ONLY_CHANNEL_IDS',
-    'PRIVATE_THREAD_ALLOWED_CHANNEL_IDS',
-    'ARCHIVE_CHANNEL_ID',
-    'VOICE_CATEGORY_ID',
-    'CREATE_VOICE_CHANNEL_ID'
+    'DISCORD_TOKEN'
 ]
 missing_vars = []
 for var in required_env_vars:
