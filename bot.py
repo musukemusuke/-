@@ -328,7 +328,7 @@ async def on_message(message):
         return
     
     # 通常のコマンドも処理できるようにする
-    await bot.process_commands(message)
+
 
 # ボイスイベントをセットアップ
 setup_voice_events(bot)
