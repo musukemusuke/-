@@ -69,16 +69,28 @@ def setup_voice_events(bot):
                 if target_channel and target_channel.id not in archived_channel_ids:
                     archived_channel_ids.add(target_channel.id)
                     print(f"ボイスチャンネル{before.channel.name}に誰もいなくなったので、ボイスチャンネル本体のチャットをアーカイブ開始")
-                    # メッセージ履歴をPDFにアーカイブ（ボイスチャンネルでもhistory()が使用可能）
-                    await archive_text_channel_history(target_channel, bot)
-                    print(f"アーカイブ完了: {before.channel.name}のボイスチャット履歴を保存しました")
-                    # 常設ボイスの場合はメッセージだけ削除して次回に備える
-                    if not ("フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name):
-                        await target_channel.purge()
-                        print(f"常設ボイスチャンネル{before.channel.name}のチャットメッセージをクリアしました")
-                    # アーカイブ完了後、次回会話用にIDをマップから削除して再アーカイブ可能に
-                    if target_channel.id in archived_channel_ids:
-                        archived_channel_ids.remove(target_channel.id)
+                    try:
+                        # メッセージ履歴をPDFにアーカイブ（ボイスチャンネルでもhistory()が使用可能）
+                        await archive_text_channel_history(target_channel, bot)
+                        print(f"アーカイブ完了: {before.channel.name}のボイスチャット履歴を保存しました")
+                        # 常設ボイスの場合はメッセージだけ削除して次回に備える
+                        if not ("フリー" in before.channel.name or "まったり" in before.channel.name or "一時的" in before.channel.name):
+                            try:
+                                # チャンネルがまだ存在するか確認してからpurgeを実行
+                                channel_exists = any(c.id == target_channel.id for c in target_channel.guild.voice_channels)
+                                if channel_exists:
+                                    await target_channel.purge()
+                                    print(f"常設ボイスチャンネル{before.channel.name}のチャットメッセージをクリアしました")
+                                else:
+                                    print(f"[警告] 常設ボイスチャンネル{before.channel.name}が既に削除されていたため、メッセージクリアをスキップしました")
+                            except Exception as e:
+                                print(f"[エラー] 常設ボイスチャンネル{before.channel.name}のメッセージクリア中にエラーが発生: {e}")
+                    except Exception as e:
+                        print(f"[エラー] ボイスチャンネル{before.channel.name}のアーカイブ処理中にエラーが発生: {e}")
+                    finally:
+                        # アーカイブ完了後（エラーが発生しても）、次回会話用にIDをマップから削除して再アーカイブ可能に
+                        if target_channel.id in archived_channel_ids:
+                            archived_channel_ids.remove(target_channel.id)
 
     # ボイスチャンネルが削除されたときのイベント（一時的なボイスチャンネルの削除に対応）
     @bot.event
@@ -92,10 +104,14 @@ def setup_voice_events(bot):
             # ボイスチャンネル自体を対象にメッセージ履歴をPDFにアーカイブ
             if channel.id not in archived_channel_ids:
                 archived_channel_ids.add(channel.id)
-                await archive_text_channel_history(channel, bot)
-                print(f"アーカイブ完了: {channel.name}のボイスチャット履歴を保存しました")
-                if channel.id in archived_channel_ids:
-                    archived_channel_ids.remove(channel.id)
+                try:
+                    await archive_text_channel_history(channel, bot)
+                    print(f"アーカイブ完了: {channel.name}のボイスチャット履歴を保存しました")
+                except Exception as e:
+                    print(f"[エラー] 削除されたボイスチャンネル{channel.name}のアーカイブ処理中にエラーが発生: {e}")
+                finally:
+                    if channel.id in archived_channel_ids:
+                        archived_channel_ids.remove(channel.id)
 
     # Bot起動時に全サーバーの特殊チャンネルの権限を一括設定
     @bot.event
