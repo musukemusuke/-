@@ -230,7 +230,7 @@ async def on_message(message):
         # プライベートスレッドを作成
         thread = await message.channel.create_thread(
             name=thread_name,
-            auto_archive_duration=1440,  # 1日間メッセージがなければアーカイブ
+            auto_archive_duration=60,  # 1時間メッセージがなければアーカイブ
             type=discord.ChannelType.private_thread
         )
         # スレッドにコマンド実行者を追加
