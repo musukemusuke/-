@@ -237,28 +237,39 @@ async def on_member_remove(member):
     if member.bot:
         return
     guild = member.guild
-    # ギルド内からメンバーの個人ロールを検索して削除
-    # Discordはメンバー退出後にmember.rolesをクリアする場合があるため、ギルドのロール一覧から直接検索
     member_display_name = member.display_name
-    logger.info(f"メンバー {member_display_name} が退出したため、個人ロールの検索を開始します。")
+    logger.info(f"メンバー {member_display_name} が退出したため、個人ロールの削除処理を開始します。")
     
-    for role in guild.roles:
-        # Botのロールより下にあるロール、かつメンバーのニックネームと同じ名前のロールを削除
-        if role.name == member_display_name and role < guild.me.top_role and role != guild.default_role:
-            try:
-                await role.delete(reason=f"メンバー {member_display_name} が退出したため個人ロールを削除")
-                logger.info(f"メンバー {member_display_name} が退出したため、ロール {role.name} を削除しました。")
-                break
-            except Exception as e:
-                logger.error(f"ロール {role.name} の削除に失敗しました: {e}")
-    # 念のため、メンバーが退出前に持っていたロールも確認して削除（二重チェック）
+    # Botのロール位置を事前にログ出力して権限不足を事前検知
+    logger.info(f"Botの最上位ロール: {guild.me.top_role.name}, 位置: {guild.me.top_role.position}")
+    for role in member.roles:
+        if role != guild.default_role:
+            logger.info(f"メンバーが保持していたロール: {role.name}, 位置: {role.position}")
+    
+    # メンバーが退出する直前に持っていた全ての個人ロールを、タイミングの問題が起きる前に即座に削除
+    # ニックネームが変更されていても、member.rolesに存在するロールは全て削除する
     for role in member.roles:
         if role < guild.me.top_role and role != guild.default_role:
             try:
-                await role.delete(reason=f"メンバー {member_display_name} が退出したため補足的に個人ロールを削除")
-                logger.info(f"メンバー {member_display_name} の補足処理で、ロール {role.name} を削除しました。")
+                await role.delete(reason=f"メンバー {member_display_name} が退出したため個人ロールを削除")
+                logger.info(f"メンバー {member_display_name} が退出したため、保持していたロール {role.name} を削除しました。")
+            except discord.Forbidden:
+                logger.error(f"権限不足でロール {role.name} を削除できません。Botのロールがサーバー設定で最上位に配置されているか確認してください。")
             except Exception as e:
-                logger.debug(f"補足処理でのロール削除に失敗（既に削除済みの可能性があります）: {e}")
+                logger.error(f"ロール {role.name} の削除に予期せぬ失敗: {type(e).__name__}: {str(e)}")
+    
+    # 万が一メンバーのrolesから漏れていても、ギルド内のBotより下のロールで、メンバーの過去の名前に関連するロールを検索して削除
+    # 全てのBotより下のロールを走査し、どんな名前でも残っていないか確認
+    for role in guild.roles:
+        if role < guild.me.top_role and role != guild.default_role:
+            # どのメンバーもこのロールを持っていない孤立したロールを削除
+            has_holder = any(role in m.roles for m in guild.members if not m.bot)
+            if not has_holder:
+                try:
+                    await role.delete(reason=f"メンバー {member_display_name} 退出時のクリーンアップで孤立ロール {role.name} を削除")
+                    logger.info(f"退出処理に伴うクリーンアップで、孤立していたロール {role.name} を削除しました。")
+                except Exception as e:
+                    logger.debug(f"孤立ロール {role.name} の削除に失敗: {e}")
 
 @bot.event
 async def on_member_update(before, after):
