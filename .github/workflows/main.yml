@@ -43,4 +43,6 @@ jobs:
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
       run: |
+        cd $GITHUB_WORKSPACE
+        ls -la # ディレクトリ内容を確認（デバッグ用）
         PYTHONPATH=. python -u bot.py
