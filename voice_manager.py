@@ -42,15 +42,40 @@ def setup_voice_events(bot):
                 for member in guild.members:
                     if member.bot:
                         continue
+                    # 現在の権限を取得して、既に正しい設定の場合はスキップ（処理負荷軽減）
+                    text_perms = text_channel.permissions_for(member)
+                    voice_perms = voice_channel.permissions_for(member)
+                    
                     if member not in voice_channel.members:
-                        await text_channel.set_permissions(member, send_messages=False, read_messages=False)
+                        # 既に権限が正しく設定されている場合はAPIコールをスキップ
+                        if text_perms.send_messages == False and text_perms.read_messages == False and voice_perms.send_messages == False:
+                            continue
+                        # 紐づくテキストチャットとボイスチャンネル本体の両方に権限を設定（エラーハンドリング付き）
+                        try:
+                            await text_channel.set_permissions(member, send_messages=False, read_messages=False)
+                            await voice_channel.set_permissions(member, send_messages=False)
+                        except discord.HTTPException as e:
+                            print(f"[警告] メンバー{member.display_name}のチャンネル{voice_channel.name}の権限設定に失敗: {e}")
+                    else:
+                        # 参加中のメンバーも同様に、既に権限が正しい場合はスキップ
+                        if text_perms.send_messages == True and text_perms.read_messages == True and voice_perms.send_messages == True:
+                            continue
+                        try:
+                            await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                            await voice_channel.set_permissions(member, send_messages=True)
+                        except discord.HTTPException as e:
+                            print(f"[警告] メンバー{member.display_name}のチャンネル{voice_channel.name}の権限設定に失敗: {e}")
                 print(f"ボイスチャンネル{voice_channel.name}のテキストチャット({text_channel.name})の権限を設定しました（参加者限定）")
                 
-                # 特殊チャンネル（休止・個室を作る）は更に送信不可に強化
+                # 特殊チャンネル（休止・個室を作る）は閲覧だけ許可して送信は全員不可に統合処理
                 if voice_channel.id not in processed_special_channels and ("休止" in voice_channel.name or "個室を作る" in voice_channel.name):
                     processed_special_channels.add(voice_channel.id)
-                    await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=True)
-                    print(f"特殊チャンネル{voice_channel.name}のテキストチャット送信権限を無効化しました")
+                    try:
+                        await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=True)
+                        await voice_channel.set_permissions(guild.default_role, send_messages=False)
+                        print(f"特殊チャンネル{voice_channel.name}のテキストチャット送信権限を無効化しました")
+                    except discord.HTTPException as e:
+                        print(f"[警告] 特殊チャンネル{voice_channel.name}の権限設定に失敗: {e}")
 
     # Discord標準のボイスチャンネル専用テキストチャンネルを利用したアーカイブ処理
     # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
@@ -67,10 +92,20 @@ def setup_voice_events(bot):
                 if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == after.channel.id:
                     linked_channels.append(thread)
             
-            # 紐づく全てのチャンネルに権限を付与
+            # 紐づく全てのチャンネルとボイスチャンネル本体に権限を付与
             for text_channel in linked_channels:
-                await text_channel.set_permissions(member, send_messages=True, read_messages=True)
-                print(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
+                # 現在の権限を確認して、既に正しい場合はスキップ
+                text_perms = text_channel.permissions_for(member)
+                voice_perms = after.channel.permissions_for(member)
+                if text_perms.send_messages == True and text_perms.read_messages == True and voice_perms.send_messages == True:
+                    continue
+                # 権限を設定（エラーハンドリング付き）
+                try:
+                    await after.channel.set_permissions(member, send_messages=True)
+                    await text_channel.set_permissions(member, send_messages=True, read_messages=True)
+                    print(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
+                except discord.HTTPException as e:
+                    print(f"[警告] メンバー{member.display_name}が{after.channel.name}に参加時の権限設定に失敗: {e}")
         
         # ボイスチャンネルから退出した場合、そのチャンネルのテキストチャット権限を削除
         if before.channel is not None and after.channel != before.channel:
@@ -83,10 +118,20 @@ def setup_voice_events(bot):
                 if hasattr(thread, 'voice_channel') and thread.voice_channel and thread.voice_channel.id == before.channel.id:
                     linked_channels.append(thread)
             
-            # 紐づく全てのチャンネルから権限を削除（個人ロールでもメンバー単位の権限が優先されるよう明示的に設定）
+            # 紐づく全てのチャンネルとボイスチャンネル本体から権限を削除（個人ロールでもメンバー単位の権限が優先されるよう明示的に設定）
             for text_channel in linked_channels:
-                await text_channel.set_permissions(member, send_messages=False, read_messages=False)
-                print(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット({text_channel.name})の権限を削除しました")
+                # 現在の権限を確認して、既に正しい場合はスキップ
+                text_perms = text_channel.permissions_for(member)
+                voice_perms = before.channel.permissions_for(member)
+                if text_perms.send_messages == False and text_perms.read_messages == False and voice_perms.send_messages == False:
+                    continue
+                # 権限を削除（エラーハンドリング付き）
+                try:
+                    await before.channel.set_permissions(member, send_messages=False)
+                    await text_channel.set_permissions(member, send_messages=False, read_messages=False)
+                    print(f"メンバー{member.display_name}が{before.channel.name}から退出したので、テキストチャット({text_channel.name})の権限を削除しました")
+                except discord.HTTPException as e:
+                    print(f"[警告] メンバー{member.display_name}が{before.channel.name}から退出時の権限削除に失敗: {e}")
         
         # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
         if after.channel is None and before.channel is not None:
