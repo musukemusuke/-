@@ -179,9 +179,9 @@ def setup_voice_events(bot):
                          if target_channel.id in archived_channel_ids:
                              remove_from_cache(archived_channel_ids, target_channel.id)
 
-     # ボイスチャンネルが削除されたときのイベント（一時的なボイスチャンネルの削除に対応）
-     @bot.event
-     async def on_guild_channel_delete(channel):
+    # ボイスチャンネルが削除されたときのイベント（一時的なボイスチャンネルの削除に対応）
+    @bot.event
+    async def on_guild_channel_delete(channel):
          if isinstance(channel, discord.VoiceChannel):
              # 休止チャンネルはアーカイブ処理をスキップ
              if channel.id in IGNORE_VOICE_CHANNEL_IDS or "休止" in channel.name or "個室を作る" in channel.name:
@@ -227,11 +227,11 @@ def setup_voice_events(bot):
              except Exception as e:
                  logger.warning(f"チャンネル{channel.name}の{member.display_name}の権限削除に失敗: {e}")
 
-     # Bot起動時に全サーバーのボイスチャンネルの権限を一括設定
-     @bot.event
-     async def on_ready():
-         logger.info("Botが起動しました。全ボイスチャンネルのテキストチャット権限を設定します...")
-         # 起動時の権限設定を並行処理で高速化
-         tasks = [setup_voice_text_channel_permissions(guild) for guild in bot.guilds]
-         await asyncio.gather(*tasks)
-         logger.info("全てのボイスチャンネルの権限設定が完了しました。")
+    # Bot起動時に全サーバーのボイスチャンネルの権限を一括設定
+    @bot.event
+    async def on_ready():
+        logger.info("Botが起動しました。全ボイスチャンネルのテキストチャット権限を設定します...")
+        # 起動時の権限設定を並行処理で高速化
+        tasks = [setup_voice_text_channel_permissions(guild) for guild in bot.guilds]
+        await asyncio.gather(*tasks)
+        logger.info("全てのボイスチャンネルの権限設定が完了しました。")
