@@ -30,9 +30,26 @@ if missing_vars:
 # 環境変数からトークンを取得
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 
-# 環境変数から各種IDを読み込み
+# 環境変数から各種IDを読み込み + バリデーション強化
 read_only_channel_ids = get_ids_from_env('READ_ONLY_CHANNEL_IDS')
+if not read_only_channel_ids:
+    logger.warning("READ_ONLY_CHANNEL_IDSが環境変数に設定されていないか、無効なIDが含まれています。読み取り専用チャンネルの権限設定をスキップします。")
+
 PRIVATE_THREAD_ALLOWED_CHANNEL_IDS = get_ids_from_env('PRIVATE_THREAD_ALLOWED_CHANNEL_IDS')
+if not PRIVATE_THREAD_ALLOWED_CHANNEL_IDS:
+    logger.error("PRIVATE_THREAD_ALLOWED_CHANNEL_IDSが環境変数に設定されていないか、無効なIDが含まれています。プライベートスレッド作成機能が動作しません。")
+
+# アーカイブチャンネルIDのバリデーション
+ARCHIVE_CHANNEL_ID = int(os.getenv('ARCHIVE_CHANNEL_ID', '0'))
+if ARCHIVE_CHANNEL_ID == 0:
+    logger.error("ARCHIVE_CHANNEL_IDが環境変数に設定されていないか、無効なIDです。アーカイブチャンネルの権限保護をスキップします。")
+
+# スレッドの自動アーカイブ期間を環境変数で設定可能に（Discordの制約に沿って検証）
+THREAD_AUTO_ARCHIVE_MINUTES = int(os.getenv('THREAD_AUTO_ARCHIVE_MINUTES', '60'))
+valid_archive_durations = [60, 1440, 4320, 10080]  # Discordで許可されている値
+if THREAD_AUTO_ARCHIVE_MINUTES not in valid_archive_durations:
+    logger.warning(f"THREAD_AUTO_ARCHIVE_MINUTESに無効な値({THREAD_AUTO_ARCHIVE_MINUTES})が設定されています。デフォルトの60分を使用します。有効な値: {valid_archive_durations}")
+    THREAD_AUTO_ARCHIVE_MINUTES = 60
 
 intents = discord.Intents.default()
 intents.members = True
@@ -75,14 +92,22 @@ async def process_member(member, guild):
         member_permissions.use_embedded_activities = True
         member_permissions.change_nickname = True
 
-        new_role = await guild.create_role(
-            name=role_name,
-            color=role_color,
-            permissions=member_permissions,
-            reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
-        )
-        await member.add_roles(new_role)
-        logger.info(f"メンバー {member.display_name} に新しい個人ロールを付与しました。")
+        # ロール作成時のエラーハンドリングを強化
+        try:
+            new_role = await guild.create_role(
+                name=role_name,
+                color=role_color,
+                permissions=member_permissions,
+                reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
+            )
+            await member.add_roles(new_role)
+            logger.info(f"メンバー {member.display_name} に新しい個人ロールを付与しました。ロールID: {new_role.id}")
+        except discord.Forbidden:
+            logger.error(f"権限不足でメンバー {member.display_name} の個人ロールを作成できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
+        except discord.HTTPException as e:
+            logger.error(f"メンバー {member.display_name} の個人ロール作成中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
+        except Exception as e:
+            logger.error(f"メンバー {member.display_name} の個人ロール作成中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
 
         # アーカイブチャンネルは権限設定の対象から除外（サーバーオーナーとBotだけが閲覧可能）
         archive_channel_id = int(os.getenv('ARCHIVE_CHANNEL_ID', '0'))
@@ -220,17 +245,28 @@ async def on_member_join(member):
         member_permissions.use_embedded_activities = True
         member_permissions.change_nickname = True
 
-        new_role = await guild.create_role(
-            name=role_name,
-            color=role_color,
-            permissions=member_permissions,
-            reason=f"新規メンバー {member.display_name} の個人ロール作成（基本権限を付与）"
-        )
-        await member.add_roles(new_role)
-        # 作成したロール数のメトリクスをインクリメント
-        metrics['roles_created'] += 1
-        logger.info(f"メンバー {member.display_name} に個人ロールを付与しました。")
-        assigned_role = new_role
+        # 新規メンバーのロール作成時もエラーハンドリングを強化
+        try:
+            new_role = await guild.create_role(
+                name=role_name,
+                color=role_color,
+                permissions=member_permissions,
+                reason=f"新規メンバー {member.display_name} の個人ロール作成（基本権限を付与）"
+            )
+            await member.add_roles(new_role)
+            # 作成したロール数のメトリクスをインクリメント
+            metrics['roles_created'] += 1
+            logger.info(f"メンバー {member.display_name} に個人ロールを付与しました。ロールID: {new_role.id}")
+            assigned_role = new_role
+        except discord.Forbidden:
+            logger.error(f"権限不足で新規メンバー {member.display_name} の個人ロールを作成できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
+            return  # ロール作成失敗時は後続の権限設定処理をスキップ
+        except discord.HTTPException as e:
+            logger.error(f"新規メンバー {member.display_name} の個人ロール作成中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
+            return
+        except Exception as e:
+            logger.error(f"新規メンバー {member.display_name} の個人ロール作成中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
+            return
     else:
         await member.add_roles(existing_role)
         logger.info(f"既存の個人ロール{role_name}を{member.display_name}に付与しました。")
@@ -336,10 +372,10 @@ async def on_message(message):
         else:  # 独り言チャンネル
             thread_name = f"{member.display_name}の独り言"
         
-        # プライベートスレッドを作成
+        # プライベートスレッドを作成（環境変数で設定したアーカイブ期間を使用）
         thread = await message.channel.create_thread(
             name=thread_name,
-            auto_archive_duration=60,  # 1時間メッセージがなければアーカイブ
+            auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES,
             type=discord.ChannelType.private_thread
         )
         # スレッドにコマンド実行者を追加
