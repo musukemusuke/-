@@ -200,32 +200,32 @@ def setup_voice_events(bot):
                      if channel.id in archived_channel_ids:
                          remove_from_cache(archived_channel_ids, channel.id)
 
-     # 新しいボイスチャンネルが作成されたときに自動的に権限を設定
-     @bot.event
-     async def on_guild_channel_create(channel):
-         if isinstance(channel, discord.VoiceChannel):
-             logger.info(f"新しいボイスチャンネル{channel.name}が作成されました。権限設定を実行します。")
-             # 少し待機して紐づくテキストチャンネルが作成されるのを待つ
-             await asyncio.sleep(1)
-             await setup_voice_text_channel_permissions(channel.guild)
+    # 新しいボイスチャンネルが作成されたときに自動的に権限を設定
+    @bot.event
+    async def on_guild_channel_create(channel):
+        if isinstance(channel, discord.VoiceChannel):
+            logger.info(f"新しいボイスチャンネル{channel.name}が作成されました。権限設定を実行します。")
+            # 少し待機して紐づくテキストチャンネルが作成されるのを待つ
+            await asyncio.sleep(1)
+            await setup_voice_text_channel_permissions(channel.guild)
 
-     # メンバーがサーバーから脱退したときにキャッシュと全チャンネルの権限をクリーンアップ
-     @bot.event
-     async def on_member_remove(member):
-         logger.info(f"メンバー{member.display_name}がサーバーから脱退しました。権限とキャッシュをクリーンアップします。")
-         
-         # サーバー内の全てのチャンネルから退出メンバーの権限を削除
-         for channel in member.guild.channels:
-             try:
-                 permissions = channel.overwrites_for(member)
-                 # 権限が設定されている場合のみ削除処理を実行
-                 if any([permissions.view_channel is not None, 
-                        permissions.send_messages is not None,
-                        permissions.connect is not None]):
-                     await channel.set_permissions(member, overwrite=None)
-                     logger.debug(f"チャンネル{channel.name}から{member.display_name}の権限を削除しました。")
-             except Exception as e:
-                 logger.warning(f"チャンネル{channel.name}の{member.display_name}の権限削除に失敗: {e}")
+    # メンバーがサーバーから脱退したときにキャッシュと全チャンネルの権限をクリーンアップ
+    @bot.event
+    async def on_member_remove(member):
+        logger.info(f"メンバー{member.display_name}がサーバーから脱退しました。権限とキャッシュをクリーンアップします。")
+        
+        # サーバー内の全てのチャンネルから退出メンバーの権限を削除
+        for channel in member.guild.channels:
+            try:
+                permissions = channel.overwrites_for(member)
+                # 権限が設定されている場合のみ削除処理を実行
+                if any([permissions.view_channel is not None, 
+                       permissions.send_messages is not None,
+                       permissions.connect is not None]):
+                    await channel.set_permissions(member, overwrite=None)
+                    logger.debug(f"チャンネル{channel.name}から{member.display_name}の権限を削除しました。")
+            except Exception as e:
+                logger.warning(f"チャンネル{channel.name}の{member.display_name}の権限削除に失敗: {e}")
 
     # Bot起動時に全サーバーのボイスチャンネルの権限を一括設定
     @bot.event
