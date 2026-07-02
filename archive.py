@@ -1,7 +1,7 @@
-import os
 import io
 import asyncio
 import unicodedata
+import os
 import discord
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -9,9 +9,16 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from PIL import Image
 import pypdfium2 as pdfium
+from utils import setup_logger, get_ids_from_env
 
-# アーカイブ用チャンネルID
-ARCHIVE_CHANNEL_ID = 1521780512795132015  # アーカイブ用チャンネルのID
+# ロガーの初期化
+logger = setup_logger(__name__)
+
+# アーカイブ用チャンネルID（環境変数から読み込み）
+ARCHIVE_CHANNEL_IDS = get_ids_from_env('ARCHIVE_CHANNEL_ID')
+ARCHIVE_CHANNEL_ID = ARCHIVE_CHANNEL_IDS[0] if ARCHIVE_CHANNEL_IDS else None
+if not ARCHIVE_CHANNEL_ID:
+    logger.error("ARCHIVE_CHANNEL_IDが環境変数に設定されていません！アーカイブ機能が動作しません。")
 
 # チャット履歴をPDFに生成し画像に変換する関数
 def create_chat_pdf(messages, channel_name):
@@ -28,12 +35,11 @@ def create_chat_pdf(messages, channel_name):
         # Windows環境: MSゴシック
         font_path = "msgothic.ttc"
         pdfmetrics.registerFont(TTFont('jp_font', font_path))
-        print("create_chat_pdf: MSゴシックフォントを使用")
+        logger.info("create_chat_pdf: MSゴシックフォントを使用")
     except Exception as e:
-        print(f"create_chat_pdf: MSゴシック登録失敗: {e}")
+        logger.warning(f"create_chat_pdf: MSゴシック登録失敗: {e}")
         try:
             # Linux環境: Ubuntuでインストール可能なIPAフォント（ttf形式でReportLabと互換性あり）
-            import os
             font_paths = [
                 "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
                 "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
@@ -46,15 +52,15 @@ def create_chat_pdf(messages, channel_name):
                     break
             if font_path:
                 pdfmetrics.registerFont(TTFont('jp_font', font_path))
-                print(f"create_chat_pdf: Linux用IPAゴシックフォントを使用 (path={font_path})")
+                logger.info(f"create_chat_pdf: Linux用IPAゴシックフォントを使用 (path={font_path})")
             else:
                 raise Exception("フォントがどのパスにも存在しません")
         except Exception as e:
-            print(f"create_chat_pdf: Linuxフォント登録失敗: {e}")
+            logger.error(f"create_chat_pdf: Linuxフォント登録失敗: {e}")
             # フォント一覧を出力
             import glob
             font_files = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True) + glob.glob("/usr/share/fonts/**/*.ttc", recursive=True)
-            print(f"利用可能なフォントファイル: {font_files}")
+            logger.debug(f"利用可能なフォントファイル: {font_files}")
             raise
     
     # 背景色を設定（PDFは黒背景にするために矩形を描画）

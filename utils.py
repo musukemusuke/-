@@ -111,9 +111,9 @@ def save_cache(archived_channel_ids, processed_special_channels):
                 'processed_special_channels': list(processed_special_channels)
             }, f, ensure_ascii=False, indent=2)
         logger = setup_logger(__name__)
-         logger.debug(f"キャッシュを保存しました。アーカイブ済みチャンネル数: {len(archived_channel_ids)}")
-         # キャッシュ保存のメトリクスをインクリメント
-         metrics['cache_saves'] += 1
+        logger.debug(f"キャッシュを保存しました。アーカイブ済みチャンネル数: {len(archived_channel_ids)}")
+        # キャッシュ保存のメトリクスをインクリメント
+        metrics['cache_saves'] += 1
     except Exception as e:
         logger = setup_logger(__name__)
         logger.warning(f"キャッシュファイルの保存に失敗: {e}")
