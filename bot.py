@@ -84,8 +84,13 @@ async def process_member(member, guild):
         await member.add_roles(new_role)
         logger.info(f"メンバー {member.display_name} に新しい個人ロールを付与しました。")
 
+        # アーカイブチャンネルは権限設定の対象から除外（サーバーオーナーとBotだけが閲覧可能）
+        archive_channel_id = int(os.getenv('ARCHIVE_CHANNEL_ID', '0'))
         # 全チャンネルの権限をリトライ付きで設定
         for channel in guild.channels:
+            # アーカイブチャンネルは権限設定をスキップ
+            if channel.id == archive_channel_id:
+                continue
             if channel.id in read_only_channel_ids:
                 await set_permissions_with_retry(channel, new_role, {"view_channel": True, "send_messages": False}, logger=logger)
             else:
@@ -208,8 +213,13 @@ async def on_member_join(member):
         logger.info(f"既存の個人ロール{role_name}を{member.display_name}に付与しました。")
         assigned_role = existing_role
 
+    # アーカイブチャンネルは権限設定の対象から除外（サーバーオーナーとBotだけが閲覧可能）
+    archive_channel_id = int(os.getenv('ARCHIVE_CHANNEL_ID', '0'))
     # すべてのチャンネルで閲覧権限をリトライ付きで設定
     for channel in guild.channels:
+        # アーカイブチャンネルは権限設定をスキップ
+        if channel.id == archive_channel_id:
+            continue
         if channel.id in read_only_channel_ids:
             # 読み取り専用チャンネルは閲覧可、送信不可
             await set_permissions_with_retry(channel, assigned_role, {"view_channel": True, "send_messages": False}, logger=logger)
