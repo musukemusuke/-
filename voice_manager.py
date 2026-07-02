@@ -36,23 +36,7 @@ def setup_voice_events(bot):
     # ボイスチャンネルの状態が変更されたときのイベント（誰かが入退室したときに発火）
     @bot.event
     async def on_voice_state_update(member, before, after):
-        # ボイスチャンネルに誰かが参加したタイミングで特殊チャンネルの権限を再確認
-        if after.channel is not None:
-            if "休止" in after.channel.name or "個室を作る" in after.channel.name:
-                text_channel = None
-                # サーバー全体の全テキストチャンネルから検索
-                all_text_channels = [c for c in after.channel.guild.text_channels]
-                for channel in all_text_channels:
-                    if hasattr(channel, 'voice_channel') and channel.voice_channel == after.channel:
-                        text_channel = channel
-                        break
-                if not text_channel:
-                    for channel in all_text_channels:
-                        if channel.name == after.channel.name or channel.name.startswith(after.channel.name):
-                            text_channel = channel
-                            break
-                if text_channel:
-                    await text_channel.set_permissions(after.channel.guild.default_role, send_messages=False, read_messages=True)
+        # 参加時の重複権限設定処理を削除（Bot起動時に1回だけ実行済み）
         # ボイスチャンネルから完全に退出し、誰も残っていない場合にアーカイブ処理を実行
         if after.channel is None and before.channel is not None:
             # 休止チャンネルはアーカイブ処理をスキップ
