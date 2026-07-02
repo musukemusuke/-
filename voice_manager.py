@@ -110,8 +110,8 @@ def setup_voice_events(bot):
                 # 権限を設定（エラーハンドリング付き）
                 try:
                     await set_permissions_with_retry(after.channel, member, {"send_messages": True})
-                     await set_permissions_with_retry(text_channel, member, {"send_messages": True, "read_messages": True})
-                     logger.info(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
+                    await set_permissions_with_retry(text_channel, member, {"send_messages": True, "read_messages": True})
+                    logger.info(f"メンバー{member.display_name}が{after.channel.name}に参加したので、テキストチャット({text_channel.name})の権限を付与しました")
          
          # ボイスチャンネルから退出した場合、そのチャンネルのテキストチャット権限を削除
          if before.channel is not None and after.channel != before.channel:
