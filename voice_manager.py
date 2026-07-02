@@ -15,18 +15,18 @@ def setup_voice_events(bot):
     async def disable_chat_for_special_channels(guild):
         for voice_channel in guild.voice_channels:
             if "休止" in voice_channel.name or "個室を作る" in voice_channel.name:
-                # 紐づくテキストチャンネルを検索
+                # 紐づくテキストチャンネルを検索（サーバー全体から検索）
                 text_channel = None
-                if voice_channel.category:
-                    for channel in voice_channel.category.text_channels:
-                        if hasattr(channel, 'voice_channel') and channel.voice_channel == voice_channel:
+                all_text_channels = [c for c in guild.text_channels]
+                for channel in all_text_channels:
+                    if hasattr(channel, 'voice_channel') and channel.voice_channel == voice_channel:
+                        text_channel = channel
+                        break
+                if not text_channel:
+                    for channel in all_text_channels:
+                        if channel.name == voice_channel.name or channel.name.startswith(voice_channel.name):
                             text_channel = channel
                             break
-                    if not text_channel:
-                        for channel in voice_channel.category.text_channels:
-                            if channel.name == voice_channel.name or channel.name.startswith(voice_channel.name):
-                                text_channel = channel
-                                break
                 # テキストチャンネルが存在すればeveryoneの送信権限を無効化
                 if text_channel:
                     await text_channel.set_permissions(guild.default_role, send_messages=False, read_messages=True)
@@ -38,15 +38,16 @@ def setup_voice_events(bot):
     async def on_voice_state_update(member, before, after):
         # ボイスチャンネルに誰かが参加したタイミングで特殊チャンネルの権限を再確認
         if after.channel is not None:
-            if "休止" in after.channel.name or "個室を作る" in after.channel.name:
-                text_channel = None
-                if after.channel.category:
-                    for channel in after.channel.category.text_channels:
+                if "休止" in after.channel.name or "個室を作る" in after.channel.name:
+                    text_channel = None
+                    # サーバー全体の全テキストチャンネルから検索
+                    all_text_channels = [c for c in after.channel.guild.text_channels]
+                    for channel in all_text_channels:
                         if hasattr(channel, 'voice_channel') and channel.voice_channel == after.channel:
                             text_channel = channel
                             break
                     if not text_channel:
-                        for channel in after.channel.category.text_channels:
+                        for channel in all_text_channels:
                             if channel.name == after.channel.name or channel.name.startswith(after.channel.name):
                                 text_channel = channel
                                 break
@@ -65,9 +66,11 @@ def setup_voice_events(bot):
                 print(f"[デバッグ] {before.channel.name} の人間メンバーが0になったのでアーカイブ処理を開始")
                 # ボイスチャンネルに紐づく標準テキストチャンネルを検索（discord.pyバージョン互換性対策）
                 text_channel = None
-                print(f"[デバッグ] 同カテゴリのテキストチャンネル一覧: {[c.name for c in before.channel.category.text_channels]}")
-                # 同カテゴリ内のテキストチャンネルから、ボイスチャンネルに紐づくものを探す
-                for channel in before.channel.category.text_channels:
+                # サーバー全体の全テキストチャンネルから検索（カテゴリが分かれていても検出可能）
+                all_text_channels = [c for c in before.channel.guild.text_channels]
+                print(f"[デバッグ] サーバー内の全テキストチャンネル一覧: {[c.name for c in all_text_channels]}")
+                # 全テキストチャンネルから、ボイスチャンネルに紐づくものを探す
+                for channel in all_text_channels:
                     # Discord標準のボイス専用テキストチャンネルは、元のボイスチャンネルの名前を基に作成され、かつvoice_channel属性で紐付けられている
                     print(f"[デバッグ] チェック中: {channel.name}, hasattr(voice_channel)={hasattr(channel, 'voice_channel')}")
                     if hasattr(channel, 'voice_channel') and channel.voice_channel == before.channel:
@@ -105,18 +108,22 @@ def setup_voice_events(bot):
             
             # 削除されたボイスチャンネルに紐づく標準テキストチャンネルを検索（discord.pyバージョン互換性対策）
             text_channel = None
-            # 同カテゴリ内のテキストチャンネルから、ボイスチャンネルに紐づくものを探す
-            if channel.category:
-                for category_channel in channel.category.text_channels:
-                    if hasattr(category_channel, 'voice_channel') and category_channel.voice_channel == channel:
+            # サーバー全体の全テキストチャンネルから検索（カテゴリが分かれていても検出可能）
+            all_text_channels = [c for c in channel.guild.text_channels]
+            print(f"[デバッグ] 削除されたボイスチャンネル{channel.name}の検索: サーバー内全テキストチャンネル={[c.name for c in all_text_channels]}")
+            # 全テキストチャンネルから、ボイスチャンネルに紐づくものを探す
+            for category_channel in all_text_channels:
+                if hasattr(category_channel, 'voice_channel') and category_channel.voice_channel == channel:
+                    text_channel = category_channel
+                    print(f"[デバッグ] 削除ボイスに紐づくテキストチャンネルを発見: {text_channel.name}")
+                    break
+            # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
+            if not text_channel:
+                for category_channel in all_text_channels:
+                    if category_channel.name == channel.name or category_channel.name.startswith(channel.name):
                         text_channel = category_channel
+                        print(f"[デバッグ] 名前一致で削除ボイスのテキストチャンネルを発見: {text_channel.name}")
                         break
-                # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
-                if not text_channel:
-                    for category_channel in channel.category.text_channels:
-                        if category_channel.name == channel.name or category_channel.name.startswith(channel.name):
-                            text_channel = category_channel
-                            break
             
             if text_channel and text_channel.id not in archived_channel_ids:
                 archived_channel_ids.add(text_channel.id)
