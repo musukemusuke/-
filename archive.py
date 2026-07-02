@@ -270,6 +270,13 @@ async def archive_text_channel_history(channel, bot):
             if not isinstance(target, discord.Member) and target != archive_channel.guild.default_role and target != archive_channel.guild.owner and target != bot.user:
                 await archive_channel.set_permissions(target, read_messages=False, send_messages=False, read_message_history=False)
         print(f"{channel.name} のアーカイブが完全に完了しました。全{len(messages)}件のメッセージを保存し、全ての余分な権限上書きを削除しました。")
+        
+        # アーカイブ完了後、元のテキストチャンネルの全メッセージを一括削除（常設ボイスで常に最新の会話だけを残す）
+        try:
+            deleted = await channel.purge(limit=None)
+            print(f"元のテキストチャンネル{channel.name}の{len(deleted)}件のメッセージを削除しました。常設ボイスのチャンネルをクリーンに保ちます。")
+        except Exception as purge_e:
+            print(f"メッセージ削除中にエラーが発生しました: {purge_e}")
     except Exception as e:
         print(f"PDF生成中にエラーが発生しました: {e}")
         print(traceback.format_exc())
@@ -283,3 +290,10 @@ async def archive_text_channel_history(channel, bot):
             else:
                 await archive_channel.send(content)
         await archive_channel.send(f"✅ {channel.name} のテキストアーカイブが完了しました。全{len(messages)}件のメッセージを保存しました。\n---")
+        
+        # PDF生成失敗時も元のテキストチャンネルのメッセージを削除
+        try:
+            deleted = await channel.purge(limit=None)
+            print(f"テキストアーカイブ完了後、元のテキストチャンネル{channel.name}の{len(deleted)}件のメッセージを削除しました。")
+        except Exception as purge_e:
+            print(f"メッセージ削除中にエラーが発生しました: {purge_e}")
