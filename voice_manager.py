@@ -60,21 +60,30 @@ def setup_voice_events(bot):
             
             # ボイスチャンネルに残っている人間メンバーを確認
             remaining_humans = [m for m in before.channel.members if not m.bot]
+            print(f"[デバッグ] {before.channel.name} 退出検知: 残りの人間メンバー数={len(remaining_humans)}, メンバー一覧={[m.display_name for m in remaining_humans]}")
             if len(remaining_humans) == 0:
+                print(f"[デバッグ] {before.channel.name} の人間メンバーが0になったのでアーカイブ処理を開始")
                 # ボイスチャンネルに紐づく標準テキストチャンネルを検索（discord.pyバージョン互換性対策）
                 text_channel = None
+                print(f"[デバッグ] 同カテゴリのテキストチャンネル一覧: {[c.name for c in before.channel.category.text_channels]}")
                 # 同カテゴリ内のテキストチャンネルから、ボイスチャンネルに紐づくものを探す
                 for channel in before.channel.category.text_channels:
                     # Discord標準のボイス専用テキストチャンネルは、元のボイスチャンネルの名前を基に作成され、かつvoice_channel属性で紐付けられている
+                    print(f"[デバッグ] チェック中: {channel.name}, hasattr(voice_channel)={hasattr(channel, 'voice_channel')}")
                     if hasattr(channel, 'voice_channel') and channel.voice_channel == before.channel:
                         text_channel = channel
+                        print(f"[デバッグ] voice_channel属性でテキストチャンネルを発見: {text_channel.name}")
                         break
                 # 旧バージョンでvoice_channel属性がない場合は名前で推測して検索
                 if not text_channel:
+                    print(f"[デバッグ] voice_channel属性が見つからなかったので名前で検索開始")
                     for channel in before.channel.category.text_channels:
                         if channel.name == before.channel.name or channel.name.startswith(before.channel.name):
                             text_channel = channel
+                            print(f"[デバッグ] 名前一致でテキストチャンネルを発見: {text_channel.name}")
                             break
+                if not text_channel:
+                    print(f"[エラー] {before.channel.name} に紐づくテキストチャンネルが見つかりませんでした。アーカイブ処理をスキップします。")
                 
                 if text_channel and text_channel.id not in archived_channel_ids:
                     archived_channel_ids.add(text_channel.id)
