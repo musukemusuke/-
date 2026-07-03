@@ -291,8 +291,11 @@ async def cleanup_orphaned_roles():
                     for role in member.roles:
                         all_member_role_ids.add(role.id)
             
-            # Botより下のロールで、誰も持っていないロールを削除
+            # Botより下のロールで、誰も持っていないロールを削除（「bot」ロールは保護）
             for role in guild.roles:
+                # ロール名が「bot」の場合は削除しない、デフォルトロールも除外
+                if role.name == "bot":
+                    continue
                 if role.id not in all_member_role_ids and role < guild.me.top_role and role != guild.default_role:
                     try:
                         await role.delete(reason="誰も保持していない孤立した個人ロールのため削除")
@@ -327,6 +330,9 @@ async def on_ready():
         # 孤立したロールを削除
         deleted_count = 0
         for role in guild.roles:
+            # ロール名が「bot」の場合は削除しない
+            if role.name == "bot":
+                continue
             if role.id not in all_member_role_ids and role < guild.me.top_role and role != guild.default_role:
                 try:
                     await role.delete(reason="Bot起動時のクリーンアップで孤立ロールを削除")
