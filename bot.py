@@ -406,7 +406,7 @@ async def check_and_assign_missing_personal_roles():
                 if not has_role:
                     logger.info(f"定期チェック: メンバー {member.display_name} に個人ロールが不足しています。再付与を試みます。")
                     await process_member(member, guild) # 既存のprocess_member関数を再利用
-        await asyncio.sleep(3600) # 1時間ごとにチェック
+        await asyncio.sleep(600) # 10分ごとにチェック
 
 async def cleanup_orphaned_roles():
     await bot.wait_until_ready()
