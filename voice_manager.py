@@ -236,8 +236,11 @@ def setup_voice_events(bot):
                     except Exception as e:
                         logger.error(f"ロール {role.name} の削除に予期せぬ失敗: {type(e).__name__}: {str(e)}")
             
-            # 孤立したロールもこのタイミングで削除
+            # 孤立したロールもこのタイミングで削除（特定のロールは保護）
+            protected_roles = {"bot", "Jockie Music", "Lofi Radio", "PartyBeast"}  # 削除しないロール名
             for role in guild.roles:
+                if role.name in protected_roles:
+                    continue  # 保護対象のロールはスキップ
                 if role < guild.me.top_role and role != guild.default_role:
                     has_holder = any(role in m.roles for m in guild.members if not m.bot)
                     if not has_holder:
