@@ -65,52 +65,83 @@ async def process_member(member, guild):
     # 処理したメンバー数のメトリクスをインクリメント
     metrics['members_processed'] += 1
     
-    # メンバーが自分の名前のロールを持っているか確認
     role_name = member.display_name[:100]  # ロール名は最大100文字
-    has_role = any(role.name == role_name for role in member.roles)
+    target_role = None
+
+    # 1. メンバーが既に個人ロールを持っているか確認
+    existing_member_role = next((r for r in member.roles if r.name == role_name), None)
     
-    if not has_role:
-        logger.info(f"メンバー {member.display_name} にロールが付与されていないので作成します...")
-        role_color = discord.Color.random()
-        member_permissions = discord.Permissions()
-        member_permissions.view_channel = True
-        member_permissions.send_messages = True
-        member_permissions.read_message_history = True
-        member_permissions.add_reactions = True
-        member_permissions.embed_links = True
-        member_permissions.attach_files = True
-        member_permissions.external_emojis = True
-        member_permissions.external_stickers = True
-        member_permissions.send_messages_in_threads = True
-        member_permissions.send_polls = True
-        member_permissions.use_application_commands = True
-        member_permissions.mention_everyone = False
-        member_permissions.connect = True
-        member_permissions.speak = True
-        member_permissions.stream = True
-        member_permissions.use_voice_activation = True
-        member_permissions.set_voice_channel_status = True
-        member_permissions.use_embedded_activities = True
-        member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
-        member_permissions.change_nickname = True
+    if existing_member_role:
+        logger.debug(f"メンバー {member.display_name} は既に個人ロール {role_name} を持っています。")
+        target_role = existing_member_role
+    else:
+        # 2. サーバー内に同名のロールが存在するか確認
+        existing_guild_role = next((r for r in guild.roles if r.name == role_name), None)
+        
+        if existing_guild_role:
+            logger.info(f"メンバー {member.display_name} に個人ロール {role_name} が付与されていませんが、サーバーに既存のロールがあります。付与します。")
+            target_role = existing_guild_role
+            try:
+                await member.add_roles(target_role, reason=f"メンバー {member.display_name} に既存の個人ロール {role_name} を再付与")
+                logger.info(f"メンバー {member.display_name} に既存の個人ロール {role_name} を付与しました。ロールID: {target_role.id}")
+            except discord.Forbidden:
+                logger.error(f"権限不足でメンバー {member.display_name} に既存の個人ロール {role_name} を付与できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
+                return # ロール付与に失敗したら権限設定もスキップ
+            except discord.HTTPException as e:
+                logger.error(f"メンバー {member.display_name} に既存の個人ロール {role_name} を付与中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
+                return
+            except Exception as e:
+                logger.error(f"メンバー {member.display_name} に既存の個人ロール {role_name} を付与中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
+                return
+        else:
+            logger.info(f"メンバー {member.display_name} に個人ロール {role_name} が付与されておらず、サーバーにも存在しないため、新しく作成します。")
+            role_color = discord.Color.random()
+            member_permissions = discord.Permissions()
+            member_permissions.view_channel = True
+            member_permissions.send_messages = True
+            member_permissions.read_message_history = True
+            member_permissions.add_reactions = True
+            member_permissions.embed_links = True
+            member_permissions.attach_files = True
+            member_permissions.external_emojis = True
+            member_permissions.external_stickers = True
+            member_permissions.send_messages_in_threads = True
+            member_permissions.send_polls = True
+            member_permissions.use_application_commands = True
+            member_permissions.mention_everyone = False
+            member_permissions.connect = True
+            member_permissions.speak = True
+            member_permissions.stream = True
+            member_permissions.use_voice_activation = True
+            member_permissions.set_voice_channel_status = True
+            member_permissions.use_embedded_activities = True
+            member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
+            member_permissions.change_nickname = True
 
-        # ロール作成時のエラーハンドリングを強化
-        try:
-            new_role = await guild.create_role(
-                name=role_name,
-                color=role_color,
-                permissions=member_permissions,
-                reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
-            )
-            await member.add_roles(new_role)
-            logger.info(f"メンバー {member.display_name} に新しい個人ロールを付与しました。ロールID: {new_role.id}")
-        except discord.Forbidden:
-            logger.error(f"権限不足でメンバー {member.display_name} の個人ロールを作成できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
-        except discord.HTTPException as e:
-            logger.error(f"メンバー {member.display_name} の個人ロール作成中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
-        except Exception as e:
-            logger.error(f"メンバー {member.display_name} の個人ロール作成中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
+            # ロール作成時のエラーハンドリングを強化
+            try:
+                new_role = await guild.create_role(
+                    name=role_name,
+                    color=role_color,
+                    permissions=member_permissions,
+                    reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
+                )
+                await member.add_roles(new_role)
+                logger.info(f"メンバー {member.display_name} に新しい個人ロールを付与しました。ロールID: {new_role.id}")
+                metrics['roles_created'] += 1
+                target_role = new_role
+            except discord.Forbidden:
+                logger.error(f"権限不足でメンバー {member.display_name} の個人ロールを作成できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
+                return # ロール作成に失敗したら権限設定もスキップ
+            except discord.HTTPException as e:
+                logger.error(f"メンバー {member.display_name} の個人ロール作成中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
+                return
+            except Exception as e:
+                logger.error(f"メンバー {member.display_name} の個人ロール作成中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
+                return
 
+    # target_role が設定されている場合のみ権限設定を行う
+    if target_role:
         # アーカイブチャンネルは権限設定の対象から除外（サーバーオーナーとBotだけが閲覧可能）
         # ARCHIVE_CHANNEL_IDが0の場合はスキップ
         if ARCHIVE_CHANNEL_ID != 0:
@@ -119,11 +150,11 @@ async def process_member(member, guild):
                 # アーカイブチャンネルは権限設定をスキップ
                 if channel.id == ARCHIVE_CHANNEL_ID:
                     continue
-                if channel.id in read_only_channel_ids:
-                    await set_permissions_with_retry(channel, new_role, {"view_channel": True, "send_messages": False}, logger=logger)
+                if channel.id in READ_ONLY_CHANNEL_IDS: # READ_ONLY_CHANNEL_IDS を使用
+                    await set_permissions_with_retry(channel, target_role, {"view_channel": True, "send_messages": False}, logger=logger)
                 else:
-                    await set_permissions_with_retry(channel, new_role, {"view_channel": True, "send_messages": True}, logger=logger)
-                logger.debug(f"チャンネル {channel.name} で {new_role.name} の権限を設定しました。")
+                    await set_permissions_with_retry(channel, target_role, {"view_channel": True, "send_messages": True}, logger=logger)
+                logger.debug(f"チャンネル {channel.name} で {target_role.name} の権限を設定しました。")
     
 # ヘルスチェック用エンドポイント
 async def health_check(request):
