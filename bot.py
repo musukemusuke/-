@@ -94,51 +94,106 @@ async def process_member(member, guild):
                 logger.error(f"メンバー {member.display_name} に既存の個人ロール {role_name} を付与中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
                 return
         else:
-            logger.info(f"メンバー {member.display_name} に個人ロール {role_name} が付与されておらず、サーバーにも存在しないため、新しく作成します。")
-            role_color = discord.Color.random()
-            member_permissions = discord.Permissions()
-            member_permissions.view_channel = True
-            member_permissions.send_messages = True
-            member_permissions.read_message_history = True
-            member_permissions.add_reactions = True
-            member_permissions.embed_links = True
-            member_permissions.attach_files = True
-            member_permissions.external_emojis = True
-            member_permissions.external_stickers = True
-            member_permissions.send_messages_in_threads = True
-            member_permissions.send_polls = True
-            member_permissions.use_application_commands = True
-            member_permissions.mention_everyone = False
-            member_permissions.connect = True
-            member_permissions.speak = True
-            member_permissions.stream = True
-            member_permissions.use_voice_activation = True
-            member_permissions.set_voice_channel_status = True
-            member_permissions.use_embedded_activities = True
-            member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
-            member_permissions.change_nickname = True
+            # 3. サーバー内に「新しいロール」というプレースホルダーロールが存在するか確認し、変換する
+            placeholder_role_name = "新しいロール" # ユーザーが指定したロール名
+            placeholder_role = discord.utils.get(guild.roles, name=placeholder_role_name)
 
-            # ロール作成時のエラーハンドリングを強化
-            try:
-                new_role = await guild.create_role(
-                    name=role_name,
-                    color=role_color,
-                    permissions=member_permissions,
-                    reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
-                )
-                await member.add_roles(new_role)
-                logger.info(f"メンバー {member.display_name} に新しい個人ロールを付与しました。ロールID: {new_role.id}")
-                metrics['roles_created'] += 1
-                target_role = new_role
-            except discord.Forbidden:
-                logger.error(f"権限不足でメンバー {member.display_name} の個人ロールを作成できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
-                return # ロール作成に失敗したら権限設定もスキップ
-            except discord.HTTPException as e:
-                logger.error(f"メンバー {member.display_name} の個人ロール作成中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
-                return
-            except Exception as e:
-                logger.error(f"メンバー {member.display_name} の個人ロール作成中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
-                return
+            if placeholder_role:
+                logger.info(f"メンバー {member.display_name} の個人ロール '{role_name}' が見つかりませんでしたが、プレースホルダーロール '{placeholder_role_name}' を発見しました。これを個人ロールとして変換します。")
+                try:
+                    # ロール名の変更
+                    await placeholder_role.edit(name=role_name, reason=f"プレースホルダーロール '{placeholder_role_name}' を {member.display_name} の個人ロールに変換")
+                    logger.info(f"ロール '{placeholder_role_name}' を '{role_name}' にリネームしました。")
+
+                    # 色と権限の設定 (既存の個人ロール作成ロジックを再利用)
+                    role_color = discord.Color.random()
+                    member_permissions = discord.Permissions()
+                    member_permissions.view_channel = True
+                    member_permissions.send_messages = True
+                    member_permissions.read_message_history = True
+                    member_permissions.add_reactions = True
+                    member_permissions.embed_links = True
+                    member_permissions.attach_files = True
+                    member_permissions.external_emojis = True
+                    member_permissions.external_stickers = True
+                    member_permissions.send_messages_in_threads = True
+                    member_permissions.send_polls = True
+                    member_permissions.use_application_commands = True
+                    member_permissions.mention_everyone = False
+                    member_permissions.connect = True
+                    member_permissions.speak = True
+                    member_permissions.stream = True
+                    member_permissions.use_voice_activation = True
+                    member_permissions.set_voice_channel_status = True
+                    member_permissions.use_embedded_activities = True
+                    member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
+                    member_permissions.change_nickname = True
+
+                    await placeholder_role.edit(color=role_color, permissions=member_permissions, reason=f"{member.display_name} の個人ロールの権限と色を設定")
+                    logger.info(f"個人ロール '{role_name}' の色と権限を設定しました。")
+
+                    # メンバーにロールを付与
+                    await member.add_roles(placeholder_role)
+                    logger.info(f"メンバー {member.display_name} に変換された個人ロール '{role_name}' を付与しました。ロールID: {placeholder_role.id}")
+                    metrics['roles_created'] += 1 # この場合も実質的に新しい個人ロールが「作成」されたと見なせる
+                    target_role = placeholder_role
+
+                except discord.Forbidden:
+                    logger.error(f"権限不足でプレースホルダーロール '{placeholder_role_name}' を {member.display_name} の個人ロールに変換できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
+                    return
+                except discord.HTTPException as e:
+                    logger.error(f"プレースホルダーロール '{placeholder_role_name}' を {member.display_name} の個人ロールに変換中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
+                    return
+                except Exception as e:
+                    logger.error(f"プレースホルダーロール '{placeholder_role_name}' を {member.display_name} の個人ロールに変換中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
+                    return
+            else:
+                logger.info(f"メンバー {member.display_name} に個人ロール {role_name} が付与されておらず、サーバーにも存在せず、プレースホルダーロール '{placeholder_role_name}' も見つからないため、新しく作成します。")
+                # ロール作成ロジック (既存のコード)
+                role_color = discord.Color.random()
+                member_permissions = discord.Permissions()
+                member_permissions.view_channel = True
+                member_permissions.send_messages = True
+                member_permissions.read_message_history = True
+                member_permissions.add_reactions = True
+                member_permissions.embed_links = True
+                member_permissions.attach_files = True
+                member_permissions.external_emojis = True
+                member_permissions.external_stickers = True
+                member_permissions.send_messages_in_threads = True
+                member_permissions.send_polls = True
+                member_permissions.use_application_commands = True
+                member_permissions.mention_everyone = False
+                member_permissions.connect = True
+                member_permissions.speak = True
+                member_permissions.stream = True
+                member_permissions.use_voice_activation = True
+                member_permissions.set_voice_channel_status = True
+                member_permissions.use_embedded_activities = True
+                member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
+                member_permissions.change_nickname = True
+
+                # ロール作成時のエラーハンドリングを強化
+                try:
+                    new_role = await guild.create_role(
+                        name=role_name,
+                        color=role_color,
+                        permissions=member_permissions,
+                        reason=f"Bot起動時にロールがなかったため {member.display_name} の個人ロールを作成"
+                    )
+                    await member.add_roles(new_role)
+                    logger.info(f"メンバー {member.display_name} に新しい個人ロールを付与しました。ロールID: {new_role.id}")
+                    metrics['roles_created'] += 1
+                    target_role = new_role
+                except discord.Forbidden:
+                    logger.error(f"権限不足でメンバー {member.display_name} の個人ロールを作成できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
+                    return # ロール作成に失敗したら権限設定もスキップ
+                except discord.HTTPException as e:
+                    logger.error(f"メンバー {member.display_name} の個人ロール作成中にDiscord APIエラーが発生しました。ステータスコード: {e.status}, エラーメッセージ: {e.text}")
+                    return
+                except Exception as e:
+                    logger.error(f"メンバー {member.display_name} の個人ロール作成中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
+                    return
 
     # target_role が設定されている場合のみ権限設定を行う
     if target_role:
