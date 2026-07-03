@@ -90,6 +90,7 @@ async def process_member(member, guild):
         member_permissions.use_voice_activation = True
         member_permissions.set_voice_channel_status = True
         member_permissions.use_embedded_activities = True
+        member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
         member_permissions.change_nickname = True
 
         # ロール作成時のエラーハンドリングを強化
@@ -243,6 +244,7 @@ async def on_member_join(member):
         member_permissions.use_voice_activation = True
         member_permissions.set_voice_channel_status = True
         member_permissions.use_embedded_activities = True
+        member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
         member_permissions.change_nickname = True
 
         # 新規メンバーのロール作成時もエラーハンドリングを強化
