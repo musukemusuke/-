@@ -206,6 +206,8 @@ async def on_ready():
     
     # 孤立した個人ロールの定期クリーンアップタスクを起動
     bot.loop.create_task(cleanup_orphaned_roles())
+    # 個人ロール不足メンバーの定期チェック・再付与タスクを起動
+    bot.loop.create_task(check_and_assign_missing_personal_roles())
 
 @bot.event
 async def on_member_join(member):
@@ -391,6 +393,21 @@ async def on_message(message):
 
 
 # 定期的に孤立した個人ロールをクリーンアップするタスク
+async def check_and_assign_missing_personal_roles():
+    while True:
+        for guild in bot.guilds:
+            logger.info(f"定期チェック: ギルド {guild.name} の個人ロール不足メンバーを検索します...")
+            for member in guild.members:
+                if member.bot:
+                    continue
+                role_name = member.display_name[:100]
+                has_role = any(role.name == role_name for role in member.roles)
+
+                if not has_role:
+                    logger.info(f"定期チェック: メンバー {member.display_name} に個人ロールが不足しています。再付与を試みます。")
+                    await process_member(member, guild) # 既存のprocess_member関数を再利用
+        await asyncio.sleep(3600) # 1時間ごとにチェック
+
 async def cleanup_orphaned_roles():
     await bot.wait_until_ready()
     while not bot.is_closed():
