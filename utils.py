@@ -15,7 +15,7 @@ metrics = {
 # 全モジュールで共通して使用するロガーを設定
 def setup_logger(name=__name__):
     # 環境変数からログレベルを取得（デフォルトはINFO）
-    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
     level = getattr(logging, log_level, logging.INFO)
     
     logger = logging.getLogger(name)
