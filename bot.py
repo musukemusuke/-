@@ -1,5 +1,4 @@
 import sys
-print("DEBUG: bot.py の実行を開始しました。")
 import os
 import asyncio
 import discord
@@ -368,6 +367,48 @@ async def on_member_update(before, after):
 
     guild = after.guild
     member_personal_role_name = after.display_name[:100] # 現在の表示名から個人ロール名を決定
+
+    # ロールが変更されたかどうかをチェック
+    if before.roles != after.roles:
+        logger.debug(f"メンバー {after.display_name} のロールが更新されました。")
+
+        # 個人ロールが削除されたかどうかをチェック
+        # beforeには個人ロールがあったが、afterにはない場合
+        personal_role_removed = False
+        for role in before.roles:
+            if role.name == member_personal_role_name:
+                # beforeに個人ロールがあった
+                if not any(r.name == member_personal_role_name for r in after.roles):
+                    # afterには個人ロールがない
+                    personal_role_removed = True
+                    break
+        
+        if personal_role_removed:
+            logger.info(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' が手動で削除されたことを検知しました。再付与/作成を試みます。")
+            await process_member(after, guild)
+        else:
+            logger.debug(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' は削除されていませんでした。")
+    else:
+        logger.debug(f"メンバー {after.display_name} のロールに変更はありませんでした。")
+
+    # ニックネームが変更された場合も個人ロールを更新
+    if before.display_name != after.display_name:
+        logger.info(f"メンバー {before.display_name} のニックネームが {after.display_name} に変更されました。個人ロールの更新を試みます。")
+        
+        # 古い個人ロールを削除
+        old_role_name = before.display_name[:100]
+        old_personal_role = discord.utils.get(guild.roles, name=old_role_name)
+        if old_personal_role and old_personal_role in after.roles:
+            try:
+                await after.remove_roles(old_personal_role, reason=f"ニックネーム変更に伴い古い個人ロール {old_role_name} を削除")
+                logger.info(f"メンバー {after.display_name} から古い個人ロール {old_role_name} を削除しました。")
+            except discord.Forbidden:
+                logger.error(f"権限不足でメンバー {after.display_name} から古い個人ロール {old_role_name} を削除できません。")
+            except Exception as e:
+                logger.error(f"古い個人ロール {old_role_name} の削除中にエラーが発生しました: {e}")
+        
+        # 新しいニックネームで個人ロールを処理
+        await process_member(after, guild)
 
     # 1. ニックネームが変更された場合の処理
     if before.display_name != after.display_name:
