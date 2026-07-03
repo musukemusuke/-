@@ -1,4 +1,5 @@
 import sys
+print("DEBUG: bot.py の実行を開始しました。")
 import os
 import asyncio
 import discord
