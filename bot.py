@@ -59,7 +59,7 @@ bot = discord.Client(intents=intents)
 from utils import metrics
 
 # 個人ロールを作成・付与する非同期関数（並列処理用）
-async def process_member(member, guild):
+async def process_member(member, guild, read_only_channel_ids, archive_channel_id):
     if member.bot:
         return
     # 処理したメンバー数のメトリクスをインクリメント
@@ -199,13 +199,13 @@ async def process_member(member, guild):
     if target_role:
         # アーカイブチャンネルは権限設定の対象から除外（サーバーオーナーとBotだけが閲覧可能）
         # ARCHIVE_CHANNEL_IDが0の場合はスキップ
-        if ARCHIVE_CHANNEL_ID != 0:
+        if archive_channel_id != 0:
             # 全チャンネルの権限をリトライ付きで設定
             for channel in guild.channels:
                 # アーカイブチャンネルは権限設定をスキップ
-                if channel.id == ARCHIVE_CHANNEL_ID:
+                if channel.id == archive_channel_id:
                     continue
-                if channel.id in READ_ONLY_CHANNEL_IDS: # READ_ONLY_CHANNEL_IDS を使用
+                if channel.id in read_only_channel_ids: # read_only_channel_ids を使用
                     await set_permissions_with_retry(channel, target_role, {"view_channel": True, "send_messages": False}, logger=logger)
                 else:
                     await set_permissions_with_retry(channel, target_role, {"view_channel": True, "send_messages": True}, logger=logger)
@@ -443,11 +443,11 @@ async def on_member_update(before, after):
 
         if personal_role_removed:
             logger.info(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' が手動で削除されたことを検知しました。再付与/作成を試みます。")
-            await process_member(after, guild)
+            await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
         else:
             logger.debug(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' は削除されていませんでした。ロール変更があったため、process_memberを呼び出します。")
             # 個人ロールの直接的な削除でなくても、ロール変更があった場合はprocess_memberを呼び出す
-            await process_member(after, guild)
+            await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
     # ニックネームが変更された場合も個人ロールを更新
     if before.display_name != after.display_name:
