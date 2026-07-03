@@ -98,12 +98,13 @@ async def process_member(member, guild, read_only_channel_ids, archive_channel_i
             placeholder_role_name = "新しいロール" # ユーザーが指定したロール名
             # サーバー内のすべての「新しいロール」をリストで取得
             placeholder_roles = [r for r in guild.roles if r.name == placeholder_role_name]
-            # 誰も保持していない未使用のプレースホルダーロールを探す
+            # 未使用のプレースホルダーロール、または現在処理中のメンバー自身が保持しているプレースホルダーロールを探す
             available_placeholder = None
             for role in placeholder_roles:
-                # このロールを持っているメンバーがいるか確認
-                is_used = any(role in member.roles for member in guild.members)
-                if not is_used:
+                # このロールを持っているメンバーが、現在処理中のメンバー以外にいるか確認
+                is_used_by_other = any(role in m.roles and m != member for m in guild.members)
+                # 自分が持っている場合、または誰も持っていない場合は使用可能
+                if not is_used_by_other:
                     available_placeholder = role
                     break
 
