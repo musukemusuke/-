@@ -94,15 +94,24 @@ async def process_member(member, guild, read_only_channel_ids, archive_channel_i
                 logger.error(f"メンバー {member.display_name} に既存の個人ロール {role_name} を付与中に予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
                 return
         else:
-            # 3. サーバー内に「新しいロール」というプレースホルダーロールが存在するか確認し、変換する
+            # 3. サーバー内に「新しいロール」というプレースホルダーロールが存在するか確認し、未使用のものを変換する
             placeholder_role_name = "新しいロール" # ユーザーが指定したロール名
-            placeholder_role = discord.utils.get(guild.roles, name=placeholder_role_name)
+            # サーバー内のすべての「新しいロール」をリストで取得
+            placeholder_roles = [r for r in guild.roles if r.name == placeholder_role_name]
+            # 誰も保持していない未使用のプレースホルダーロールを探す
+            available_placeholder = None
+            for role in placeholder_roles:
+                # このロールを持っているメンバーがいるか確認
+                is_used = any(role in member.roles for member in guild.members)
+                if not is_used:
+                    available_placeholder = role
+                    break
 
-            if placeholder_role:
-                logger.info(f"メンバー {member.display_name} の個人ロール '{role_name}' が見つかりませんでしたが、プレースホルダーロール '{placeholder_role_name}' を発見しました。これを個人ロールとして変換します。")
+            if available_placeholder:
+                logger.info(f"メンバー {member.display_name} の個人ロール '{role_name}' が見つかりませんでしたが、未使用のプレースホルダーロール '{placeholder_role_name}' を発見しました。これを個人ロールとして変換します。")
                 try:
                     # ロール名の変更
-                    await placeholder_role.edit(name=role_name, reason=f"プレースホルダーロール '{placeholder_role_name}' を {member.display_name} の個人ロールに変換")
+                    await available_placeholder.edit(name=role_name, reason=f"プレースホルダーロール '{placeholder_role_name}' を {member.display_name} の個人ロールに変換")
                     logger.info(f"ロール '{placeholder_role_name}' を '{role_name}' にリネームしました。")
 
                     # 色と権限の設定 (既存の個人ロール作成ロジックを再利用)
@@ -129,14 +138,14 @@ async def process_member(member, guild, read_only_channel_ids, archive_channel_i
                     member_permissions.create_expressions = True # エクスプレッションを作成権限を追加
                     member_permissions.change_nickname = True
 
-                    await placeholder_role.edit(color=role_color, permissions=member_permissions, reason=f"{member.display_name} の個人ロールの権限と色を設定")
+                    await available_placeholder.edit(color=role_color, permissions=member_permissions, reason=f"{member.display_name} の個人ロールの権限と色を設定")
                     logger.info(f"個人ロール '{role_name}' の色と権限を設定しました。")
 
                     # メンバーにロールを付与
-                    await member.add_roles(placeholder_role)
-                    logger.info(f"メンバー {member.display_name} に変換された個人ロール '{role_name}' を付与しました。ロールID: {placeholder_role.id}")
+                    await member.add_roles(available_placeholder)
+                    logger.info(f"メンバー {member.display_name} に変換された個人ロール '{role_name}' を付与しました。ロールID: {available_placeholder.id}")
                     metrics['roles_created'] += 1 # この場合も実質的に新しい個人ロールが「作成」されたと見なせる
-                    target_role = placeholder_role
+                    target_role = available_placeholder
 
                 except discord.Forbidden:
                     logger.error(f"権限不足でプレースホルダーロール '{placeholder_role_name}' を {member.display_name} の個人ロールに変換できません。Botのロールがサーバー内で最上位に配置されているか、ロール管理権限が有効になっているか確認してください。")
@@ -252,7 +261,7 @@ async def start_health_server():
 async def process_guild(guild):
     logger.info(f"サーバー {guild.name} のメンバーをチェックしています...")
     # 全メンバーの処理を並列実行
-    tasks = [process_member(member, guild) for member in guild.members]
+    tasks = [process_member(member, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID) for member in guild.members]
     await asyncio.gather(*tasks)
     logger.info(f"サーバー {guild.name} のメンバーチェックが完了しました。")
 
@@ -262,7 +271,7 @@ async def ensure_personal_roles_exist():
         logger.info("定期タスク: 個人ロールの存在確認を開始します。")
         for guild in bot.guilds:
             logger.info(f"ギルド {guild.name} のメンバーの個人ロールを確認中...")
-            tasks = [process_member(member, guild) for member in guild.members]
+            tasks = [process_member(member, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID) for member in guild.members]
             await asyncio.gather(*tasks)
             logger.info(f"ギルド {guild.name} の個人ロール確認が完了しました。")
         # 24時間ごとに実行
@@ -427,27 +436,24 @@ async def on_member_update(before, after):
     logger.debug(f"on_member_update: Before roles: {[r.name for r in before.roles]}")
     logger.debug(f"on_member_update: After roles: {[r.name for r in after.roles]}")
 
-    # ロールが変更されたかどうかをチェック
-    if before.roles != after.roles:
-        logger.debug(f"メンバー {after.display_name} のロールが更新されました。")
+    # ロールが変更されたか、またはサーバー内のロール自体が削除されたかを包括的にチェック
+    # メンバーのロールリストの変更、またはサーバー全体のロールリストから個人ロールが消えていないかを確認
+    guild_personal_role_exists = any(r.name == member_personal_role_name for r in guild.roles)
+    before_personal_role_in_member = any(r.name == member_personal_role_name for r in before.roles)
+    after_personal_role_in_member = any(r.name == member_personal_role_name for r in after.roles)
 
-        # 個人ロールが削除されたかどうかをチェック
-        personal_role_removed = False
-        before_personal_role_exists = any(r.name == member_personal_role_name for r in before.roles)
-        after_personal_role_exists = any(r.name == member_personal_role_name for r in after.roles)
+    logger.debug(f"メンバー {after.display_name} の状態確認: サーバー内に個人ロール存在: {guild_personal_role_exists}, メンバー(before)が保持: {before_personal_role_in_member}, メンバー(after)が保持: {after_personal_role_in_member}")
 
-        if before_personal_role_exists and not after_personal_role_exists:
-            personal_role_removed = True
-        
-        logger.debug(f"on_member_update: 個人ロール '{member_personal_role_name}' は before に存在: {before_personal_role_exists}, after に存在: {after_personal_role_exists}")
-
-        if personal_role_removed:
-            logger.info(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' が手動で削除されたことを検知しました。再付与/作成を試みます。")
-            await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
-        else:
-            logger.debug(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' は削除されていませんでした。ロール変更があったため、process_memberを呼び出します。")
-            # 個人ロールの直接的な削除でなくても、ロール変更があった場合はprocess_memberを呼び出す
-            await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
+    # いずれかのケースで個人ロールが消失した場合、process_memberを呼び出す
+    # ケース1: メンバーからロールが外された
+    # ケース2: サーバー内からロール自体が削除された
+    if (before_personal_role_in_member and not after_personal_role_in_member) or (not guild_personal_role_exists):
+        logger.info(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' がサーバーから削除されたか、メンバーから外されたことを検知しました。即座に再作成/再付与を実行します。")
+        await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
+    elif before.roles != after.roles:
+        # その他のロール変更があった場合も念のためprocess_memberを実行
+        logger.debug(f"メンバー {after.display_name} のロールが変更されました。個人ロールの状態を再確認します。")
+        await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
     # ニックネームが変更された場合も個人ロールを更新
     if before.display_name != after.display_name:
@@ -467,7 +473,7 @@ async def on_member_update(before, after):
                 logger.error(f"古い個人ロール {old_role_name} の削除中にエラーが発生しました: {e}")
         
         # 新しいニックネームで個人ロールを処理
-        await process_member(after, guild)
+        await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
     # 1. ニックネームが変更された場合の処理
     if before.display_name != after.display_name:
@@ -490,7 +496,7 @@ async def on_member_update(before, after):
 
         # 新しい名前の個人ロールを作成または再付与
         # process_memberがロールの存在チェックと作成・付与を行う
-        await process_member(after, guild)
+        await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
         return # ニックネーム変更処理が完了したら終了
 
     # 2. ニックネームは変更されていないが、個人ロールが外された場合の処理
@@ -504,7 +510,7 @@ async def on_member_update(before, after):
     if has_personal_role_before_update and not has_personal_role_after_update:
         logger.info(f"メンバー {after.display_name} の個人ロールが手動で外されたことを検知しました。即座に再付与します。")
         # process_memberがロールの存在チェックと作成・付与を行う
-        await process_member(after, guild)
+        await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
 @bot.event
 async def on_message(message):
