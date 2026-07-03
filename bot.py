@@ -423,28 +423,31 @@ async def on_member_update(before, after):
     guild = after.guild
     member_personal_role_name = after.display_name[:100] # 現在の表示名から個人ロール名を決定
 
+    logger.debug(f"on_member_update: メンバー {after.display_name} (ID: {after.id}) の更新を検知。")
+    logger.debug(f"on_member_update: Before roles: {[r.name for r in before.roles]}")
+    logger.debug(f"on_member_update: After roles: {[r.name for r in after.roles]}")
+
     # ロールが変更されたかどうかをチェック
     if before.roles != after.roles:
         logger.debug(f"メンバー {after.display_name} のロールが更新されました。")
 
         # 個人ロールが削除されたかどうかをチェック
-        # beforeには個人ロールがあったが、afterにはない場合
         personal_role_removed = False
-        for role in before.roles:
-            if role.name == member_personal_role_name:
-                # beforeに個人ロールがあった
-                if not any(r.name == member_personal_role_name for r in after.roles):
-                    # afterには個人ロールがない
-                    personal_role_removed = True
-                    break
+        before_personal_role_exists = any(r.name == member_personal_role_name for r in before.roles)
+        after_personal_role_exists = any(r.name == member_personal_role_name for r in after.roles)
+
+        if before_personal_role_exists and not after_personal_role_exists:
+            personal_role_removed = True
         
+        logger.debug(f"on_member_update: 個人ロール '{member_personal_role_name}' は before に存在: {before_personal_role_exists}, after に存在: {after_personal_role_exists}")
+
         if personal_role_removed:
             logger.info(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' が手動で削除されたことを検知しました。再付与/作成を試みます。")
             await process_member(after, guild)
         else:
-            logger.debug(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' は削除されていませんでした。")
-    else:
-        logger.debug(f"メンバー {after.display_name} のロールに変更はありませんでした。")
+            logger.debug(f"メンバー {after.display_name} の個人ロール '{member_personal_role_name}' は削除されていませんでした。ロール変更があったため、process_memberを呼び出します。")
+            # 個人ロールの直接的な削除でなくても、ロール変更があった場合はprocess_memberを呼び出す
+            await process_member(after, guild)
 
     # ニックネームが変更された場合も個人ロールを更新
     if before.display_name != after.display_name:
@@ -453,6 +456,7 @@ async def on_member_update(before, after):
         # 古い個人ロールを削除
         old_role_name = before.display_name[:100]
         old_personal_role = discord.utils.get(guild.roles, name=old_role_name)
+        # after.rolesに古い個人ロールがまだ残っている場合のみ削除を試みる
         if old_personal_role and old_personal_role in after.roles:
             try:
                 await after.remove_roles(old_personal_role, reason=f"ニックネーム変更に伴い古い個人ロール {old_role_name} を削除")
