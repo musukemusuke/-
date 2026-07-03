@@ -24,11 +24,13 @@ def setup_logger(name=__name__):
     if not logger.handlers:
         # コンソール出力用ハンドラー
         console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
         # ファイル出力用ハンドラー（logsディレクトリに日別ログファイルを作成）
         os.makedirs('logs', exist_ok=True)
         from datetime import datetime
         log_file = f"logs/bot_{datetime.now().strftime('%Y%m%d')}.log"
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(level)
         
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         console_handler.setFormatter(formatter)
