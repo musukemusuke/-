@@ -33,21 +33,10 @@ read_only_channel_ids = get_ids_from_env('READ_ONLY_CHANNEL_IDS')
 if not read_only_channel_ids:
     logger.warning("READ_ONLY_CHANNEL_IDSが環境変数に設定されていないか、無効なIDが含まれています。読み取り専用チャンネルの権限設定をスキップします。")
 
-PRIVATE_THREAD_ALLOWED_CHANNEL_IDS = get_ids_from_env('PRIVATE_THREAD_ALLOWED_CHANNEL_IDS')
-if not PRIVATE_THREAD_ALLOWED_CHANNEL_IDS:
-    logger.error("PRIVATE_THREAD_ALLOWED_CHANNEL_IDSが環境変数に設定されていないか、無効なIDが含まれています。プライベートスレッド作成機能が動作しません。")
-
 # アーカイブチャンネルIDのバリデーション
 ARCHIVE_CHANNEL_ID = int(os.getenv('ARCHIVE_CHANNEL_ID', '0'))
 if ARCHIVE_CHANNEL_ID == 0:
     logger.error("ARCHIVE_CHANNEL_IDが環境変数に設定されていないか、無効なIDです。アーカイブチャンネルの権限保護をスキップします。")
-
-# スレッドの自動アーカイブ期間を環境変数で設定可能に（Discordの制約に沿って検証）
-THREAD_AUTO_ARCHIVE_MINUTES = int(os.getenv('THREAD_AUTO_ARCHIVE_MINUTES', '60'))
-valid_archive_durations = [60, 1440, 4320, 10080]  # Discordで許可されている値
-if THREAD_AUTO_ARCHIVE_MINUTES not in valid_archive_durations:
-    logger.warning(f"THREAD_AUTO_ARCHIVE_MINUTESに無効な値({THREAD_AUTO_ARCHIVE_MINUTES})が設定されています。デフォルトの60分を使用します。有効な値: {valid_archive_durations}")
-    THREAD_AUTO_ARCHIVE_MINUTES = 60
 
 intents = discord.Intents.default()
 intents.members = True
@@ -519,45 +508,7 @@ async def on_member_update(before, after):
         # process_memberがロールの存在チェックと作成・付与を行う
         await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
-@bot.event
-async def on_message(message):
-    # デバッグ用: 受信したメッセージの情報をログに出力
-    logger.info(f"メッセージ受信: チャンネルID={message.channel.id}, 作者={message.author.display_name}, 内容={message.content[:50]}")
-    logger.info(f"PRIVATE_THREAD_ALLOWED_CHANNEL_IDSの値: {PRIVATE_THREAD_ALLOWED_CHANNEL_IDS}")
-    
-    # Botのメッセージは無視
-    if message.author.bot:
-        return
-    
-    # 愚痴・独り言チャンネルの場合の処理
-    if message.channel.id in PRIVATE_THREAD_ALLOWED_CHANNEL_IDS:
-        # 「プライベートスレッド」以外のメッセージは自動的に削除
-        if "プライベートスレッド" not in message.content:
-            await message.delete()
-            return
-        
-        # 「プライベートスレッド」が含まれていたらスレッドを作成
-        member = message.author
-        # どのチャンネルで作成されたかでスレッド名を変える
-        if message.channel.id == 1519537065992126485:  # 愚痴チャンネル (このIDは環境変数から取得すべきですが、ここでは仮にハードコード)
-            thread_name = f"{member.display_name}の愚痴"
-        else:  # 独り言チャンネル
-            thread_name = f"{member.display_name}の独り言"
-        
-        # プライベートスレッドを作成（環境変数で設定したアーカイブ期間を使用）
-        thread = await message.channel.create_thread(
-            name=thread_name,
-            auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES,
-            type=discord.ChannelType.private_thread
-        )
-        # スレッドにコマンド実行者を追加
-        await thread.add_user(member)
-        # スレッド内だけに本人に通知を送る（他の人には見えない）
-        await thread.send(f"{member.mention} プライベートスレッドを作成しました！このスレッド内で自由に投稿できます。")
-        # コマンドメッセージ自体も削除して誰が作ったか分からないようにする
-        await message.delete()
-        print(f"メンバー {member.display_name} のプライベートスレッドを作成しました。")
-        return
+
 
 # ボイスイベントをセットアップ
 setup_voice_events(bot)
