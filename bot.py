@@ -53,6 +53,7 @@ async def process_member(member, guild, read_only_channel_ids, archive_channel_i
         return
     # 処理したメンバー数のメトリクスをインクリメント
     metrics['members_processed'] += 1
+    logger.debug(f"process_member: メンバー {member.display_name}, ギルド {guild.name}, read_only_channel_ids: {read_only_channel_ids}") # 追加
     
     role_name = member.display_name[:100]  # ロール名は最大100文字
     target_role = None
@@ -205,8 +206,10 @@ async def process_member(member, guild, read_only_channel_ids, archive_channel_i
                 if channel.id == archive_channel_id:
                     continue
                 if channel.id in read_only_channel_ids: # read_only_channel_ids を使用
+                    logger.debug(f"process_member: チャンネル {channel.name} ({channel.id}) は読み取り専用チャンネルです。個人ロール {target_role.name} のメッセージ送信権限を無効にします。") # 追加
                     await set_permissions_with_retry(channel, target_role, {"view_channel": True, "send_messages": False}, logger=logger)
                 else:
+                    logger.debug(f"process_member: チャンネル {channel.name} ({channel.id}) は通常チャンネルです。個人ロール {target_role.name} のメッセージ送信権限を有効にします。") # 追加
                     await set_permissions_with_retry(channel, target_role, {"view_channel": True, "send_messages": True}, logger=logger)
                 logger.debug(f"チャンネル {channel.name} で {target_role.name} の権限を設定しました。")
     
@@ -334,6 +337,23 @@ async def on_ready():
     # 定期タスクを起動
     bot.loop.create_task(ensure_personal_roles_exist())
     bot.loop.create_task(cleanup_orphaned_roles())
+
+    # 読み取り専用チャンネルの権限設定を明示的に実行
+    for guild in bot.guilds:
+        logger.info(f"ギルド {guild.name} の読み取り専用チャンネル権限を設定しています...")
+        logger.debug(f"READ_ONLY_CHANNEL_IDS: {read_only_channel_ids}") # デバッグログ
+        for channel_id in read_only_channel_ids:
+            channel = guild.get_channel(channel_id)
+            if channel:
+                logger.debug(f"チャンネル {channel.name} ({channel.id}) の @everyone 権限設定を試みます。") # デバッグログ
+                try:
+                    # @everyoneロールのメッセージ送信権限を無効にする
+                    await set_permissions_with_retry(channel, guild.default_role, {"send_messages": False})
+                    logger.info(f"チャンネル {channel.name} ({channel.id}) を @everyone に対して読み取り専用に設定しました。")
+                except Exception as e:
+                    logger.error(f"チャンネル {channel.name} ({channel.id}) の @everyone 読み取り専用設定に失敗しました: {e}")
+            else:
+                logger.warning(f"読み取り専用チャンネルID {channel_id} がギルド {guild.name} で見つかりませんでした。")
 
 
 @bot.event
