@@ -102,7 +102,7 @@ async def on_member_join(member):
     if member.bot:
         return
     guild = member.guild
-    await process_member(member, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
+    await process_member(bot, member, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
 @bot.event
 async def on_member_update(before, after):
