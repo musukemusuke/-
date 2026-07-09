@@ -112,6 +112,12 @@ class ThreadCloseView(ui.View):
                 try:
                     await thread.edit(archived=True, locked=True, reason=f"{interaction.user.display_name} がスレッドを閉じました。")
                     logger.info(f"スレッド '{thread.name}' (ID: {thread.id}) が {interaction.user.display_name} によって閉じられました。")
+                    
+                    # 編集後のスレッドのアーカイブ状態とロック状態をログに出力して確認
+                    updated_thread = await self.bot.fetch_channel(thread.id)
+                    if updated_thread and isinstance(updated_thread, discord.Thread):
+                        logger.info(f"スレッド '{updated_thread.name}' (ID: {updated_thread.id}) のアーカイブ状態: {updated_thread.archived}, ロック状態: {updated_thread.locked}")
+                    
                     await interaction.followup.send("スレッドを閉じました。", ephemeral=True)
                 except discord.Forbidden:
                     logger.error(f"スレッド {thread.id} を閉じる権限がありません。")
