@@ -299,6 +299,14 @@ async def cleanup_orphaned_roles():
         await asyncio.sleep(86400)
 
 
+async def load_cogs():
+    # コグを事前にロード
+    try:
+        await bot.load_extension('feedback_thread_cog')
+        logger.info("feedback_thread_cog を正常にロードしました。")
+    except Exception as e:
+        logger.error(f"feedback_thread_cog のロード中にエラーが発生しました: {e}")
+
 @bot.event
 async def on_ready():
     logger.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
@@ -307,13 +315,6 @@ async def on_ready():
     
     # ヘルスチェックサーバーを起動
     await start_health_server()
-
-    # コグをロード
-    try:
-        await bot.load_extension('feedback_thread_cog')
-        logger.info("feedback_thread_cog を正常にロードしました。")
-    except Exception as e:
-        logger.error(f"feedback_thread_cog のロード中にエラーが発生しました: {e}")
 
     # 全ギルドの処理を並列実行
     guild_tasks = [process_guild(guild) for guild in bot.guilds]
@@ -544,4 +545,7 @@ setup_voice_events(bot)
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
 
+# 起動前にコグをロード
+asyncio.run(load_cogs())
+# Botを起動
 bot.run(DISCORD_TOKEN)
