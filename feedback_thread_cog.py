@@ -91,38 +91,7 @@ class FeedbackInputModal(ui.Modal, title="意見箱への投稿"):
             logger.error(f"予期せぬエラーが発生しました: {type(e).__name__}: {str(e)}")
             await interaction.followup.send("スレッド作成中に予期せぬエラーが発生しました。", ephemeral=True)
 
-# ------------------------------------------------------------------------------------
-# スレッドを閉じる確認用View
-# ------------------------------------------------------------------------------------
-class ThreadConfirmCloseView(ui.View):
-    def __init__(self, bot: commands.Bot, thread_id: int):
-        super().__init__(timeout=60) # 60秒でタイムアウト
-        self.bot = bot
-        self.thread_id = thread_id
 
-    @ui.button(label="はい、閉じます", style=discord.ButtonStyle.danger)
-    async def confirm_close(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        thread = await self.bot.fetch_channel(self.thread_id)
-        if thread and isinstance(thread, discord.Thread):
-            try:
-                await thread.edit(archived=True, locked=True, reason=f"{interaction.user.display_name} がスレッドを閉じました。")
-                logger.info(f"スレッド '{thread.name}' (ID: {thread.id}) が {interaction.user.display_name} によって閉じられました。")
-                await interaction.followup.send("スレッドを閉じました。", ephemeral=True)
-            except discord.Forbidden:
-                logger.error(f"スレッド {thread.id} を閉じる権限がありません。")
-                await interaction.followup.send("スレッドを閉じる権限がありません。", ephemeral=True)
-            except Exception as e:
-                logger.error(f"スレッド {thread.id} を閉じる際に予期せぬエラーが発生しました: {e}")
-                await interaction.followup.send("スレッドを閉じる際にエラーが発生しました。", ephemeral=True)
-        else:
-            await interaction.followup.send("スレッドが見つからないか、既に閉じられています。", ephemeral=True)
-        self.stop() # Viewを停止
-
-    @ui.button(label="キャンセル", style=discord.ButtonStyle.secondary)
-    async def cancel_close(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_message("スレッドを閉じるのをキャンセルしました。", ephemeral=True)
-        self.stop() # Viewを停止
 
 # ------------------------------------------------------------------------------------
 # スレッドを閉じるボタン
@@ -137,7 +106,21 @@ class ThreadCloseView(ui.View):
     async def close_thread_button(self, interaction: discord.Interaction, button: ui.Button):
         # スレッド開始者または管理者のみが閉じられるようにする
         if interaction.user.id == self.thread_starter_id or interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("スレッドを閉じます。よろしいですか？", view=ThreadConfirmCloseView(bot=self.bot, thread_id=interaction.channel_id), ephemeral=True)
+            await interaction.response.defer(ephemeral=True) # 応答を遅延させ、ユーザーには見えないようにする
+            thread = await self.bot.fetch_channel(interaction.channel_id)
+            if thread and isinstance(thread, discord.Thread):
+                try:
+                    await thread.edit(archived=True, locked=True, reason=f"{interaction.user.display_name} がスレッドを閉じました。")
+                    logger.info(f"スレッド '{thread.name}' (ID: {thread.id}) が {interaction.user.display_name} によって閉じられました。")
+                    await interaction.followup.send("スレッドを閉じました。", ephemeral=True)
+                except discord.Forbidden:
+                    logger.error(f"スレッド {thread.id} を閉じる権限がありません。")
+                    await interaction.followup.send("スレッドを閉じる権限がありません。Botに「スレッドの管理」権限があるか確認してください。", ephemeral=True)
+                except Exception as e:
+                    logger.error(f"スレッド {thread.id} を閉じる際に予期せぬエラーが発生しました: {e}")
+                    await interaction.followup.send("スレッドを閉じる際にエラーが発生しました。", ephemeral=True)
+            else:
+                await interaction.followup.send("スレッドが見つからないか、既に閉じられています。", ephemeral=True)
         else:
             await interaction.response.send_message("このスレッドを閉じられるのは、スレッドの開始者か管理者のみです。", ephemeral=True)
 
