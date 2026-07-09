@@ -242,6 +242,11 @@ def setup_voice_events(bot):
                 if role.name in protected_roles:
                     continue  # 保護対象のロールはスキップ
                 if role < guild.me.top_role and role != guild.default_role:
+                    # ロールがBotに紐づいている場合はスキップ
+                    if role.tags and role.tags.bot_id:
+                        logger.debug(f"ロール {role.name} はBotに紐づいているため削除をスキップします。")
+                        continue
+                    
                     has_holder = any(role in m.roles for m in guild.members if not m.bot)
                     if not has_holder:
                         try:
