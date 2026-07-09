@@ -149,7 +149,6 @@ class ThreadCloseView(ui.View):
 class FeedbackButtonView(ui.View):
     def __init__(self):
         super().__init__(timeout=None) # 永続View
-        self.add_item(ui.Button(label="意見箱に投稿する", style=discord.ButtonStyle.primary, custom_id="persistent_feedback_button"))
 
     @ui.button(label="意見箱に投稿する", style=discord.ButtonStyle.primary, custom_id="persistent_feedback_button")
     async def feedback_button(self, interaction: discord.Interaction, button: ui.Button):
