@@ -114,12 +114,12 @@ async def on_member_update(before, after):
     # ニックネームが変更された場合も個人ロールを更新
     if before.display_name != after.display_name:
         logger.info(f"メンバー {before.display_name} のニックネームが {after.display_name} に変更されました。個人ロールの更新を試みます。")
-        await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID, old_display_name=before.display_name)
+        await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID, old_display_name=before.display_name)
 
     # ニックネームは変更されていないが、ロールが変更された場合
     elif before.roles != after.roles:
         logger.info(f"メンバー {after.display_name} のロールが変更されました。個人ロールの状態を再確認します。")
-        await process_member(after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
+        await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
 
 
