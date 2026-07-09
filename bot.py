@@ -2,6 +2,7 @@ import sys
 import os
 import asyncio
 import discord
+from discord.ext import commands
 from aiohttp import web
 from utils import (
     setup_logger,
@@ -42,7 +43,7 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 # コマンド機能を使わないため、基本的なdiscord.Clientを使用
-bot = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 # utilsからメトリクスをインポート
 from utils import metrics
@@ -306,6 +307,9 @@ async def on_ready():
     
     # ヘルスチェックサーバーを起動
     await start_health_server()
+
+    # コグをロード
+    await bot.load_extension('feedback_thread_cog')
 
     # 全ギルドの処理を並列実行
     guild_tasks = [process_guild(guild) for guild in bot.guilds]
