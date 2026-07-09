@@ -251,7 +251,12 @@ def setup_voice_events(bot):
                             logger.warning(f"孤立ロール {role.name} は既に存在しないため削除をスキップしました。")
                         except discord.Forbidden: # 権限不足の場合
                             logger.error(f"権限不足で孤立ロール {role.name} を削除できません。Botのロールがサーバー設定で最上位に配置されているか確認してください。")
-                        except Exception as e:
+                        except discord.HTTPException as e: # Discord APIからのHTTPエラー
+                            if e.code == 50028: # Invalid Role
+                                logger.warning(f"孤立ロール {role.name} の削除に失敗しました。ロールが無効か、既に存在しない可能性があります (エラーコード: {e.code})。")
+                            else:
+                                logger.error(f"孤立ロール {role.name} の削除に予期せぬHTTPエラーが発生: {type(e).__name__}: {str(e)} (エラーコード: {e.code})")
+                        except Exception as e: # その他の予期せぬエラー
                             logger.error(f"孤立ロール {role.name} の削除に予期せぬ失敗: {type(e).__name__}: {str(e)}")
         except Exception as e:
             logger.critical(f"on_member_remove内で個人ロール削除処理中にエラー発生: {type(e).__name__}: {str(e)}")
