@@ -309,7 +309,11 @@ async def on_ready():
     await start_health_server()
 
     # コグをロード
-    await bot.load_extension('feedback_thread_cog')
+    try:
+        await bot.load_extension('feedback_thread_cog')
+        logger.info("feedback_thread_cog を正常にロードしました。")
+    except Exception as e:
+        logger.error(f"feedback_thread_cog のロード中にエラーが発生しました: {e}")
 
     # 全ギルドの処理を並列実行
     guild_tasks = [process_guild(guild) for guild in bot.guilds]
