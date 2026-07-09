@@ -106,7 +106,7 @@ class ThreadConfirmCloseView(ui.View):
         thread = await self.bot.fetch_channel(self.thread_id)
         if thread and isinstance(thread, discord.Thread):
             try:
-                await thread.edit(archived=True, reason=f"{interaction.user.display_name} がスレッドを閉じました。")
+                await thread.edit(archived=True, locked=True, reason=f"{interaction.user.display_name} がスレッドを閉じました。")
                 logger.info(f"スレッド '{thread.name}' (ID: {thread.id}) が {interaction.user.display_name} によって閉じられました。")
                 await interaction.followup.send("スレッドを閉じました。", ephemeral=True)
             except discord.Forbidden:
