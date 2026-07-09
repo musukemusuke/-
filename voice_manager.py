@@ -247,8 +247,12 @@ def setup_voice_events(bot):
                         try:
                             await role.delete(reason=f"メンバー {member.display_name} 退出時のクリーンアップで孤立ロール {role.name} を削除")
                             logger.info(f"退出処理に伴うクリーンアップで、孤立していたロール {role.name} を削除しました。")
+                        except discord.NotFound: # ロールが既に存在しない場合
+                            logger.warning(f"孤立ロール {role.name} は既に存在しないため削除をスキップしました。")
+                        except discord.Forbidden: # 権限不足の場合
+                            logger.error(f"権限不足で孤立ロール {role.name} を削除できません。Botのロールがサーバー設定で最上位に配置されているか確認してください。")
                         except Exception as e:
-                            logger.debug(f"孤立ロール {role.name} の削除に失敗: {e}")
+                            logger.error(f"孤立ロール {role.name} の削除に予期せぬ失敗: {type(e).__name__}: {str(e)}")
         except Exception as e:
             logger.critical(f"on_member_remove内で個人ロール削除処理中にエラー発生: {type(e).__name__}: {str(e)}")
         
