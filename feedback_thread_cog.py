@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import ui
 import asyncio
 import os
+import datetime
 
 import logging
 
@@ -65,7 +66,12 @@ class FeedbackInputModal(ui.Modal, title="意見箱への投稿"):
             )
             embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
             embed.add_field(name="投稿者", value=interaction.user.mention, inline=True)
-            embed.add_field(name="スレッド開始日時", value=discord.utils.utcnow().strftime("%Y/%m/%d %H:%M:%S UTC"), inline=True)
+            
+            # UTC時刻を取得し、JSTに変換
+            utc_now = discord.utils.utcnow()
+            jst = datetime.timezone(datetime.timedelta(hours=9))
+            jst_now = utc_now.astimezone(jst)
+            embed.add_field(name="スレッド開始日時", value=jst_now.strftime("%Y/%m/%d %H:%M:%S JST"), inline=True)
             embed.set_footer(text="このスレッドはあなたと運営者のみが閲覧できます。")
 
             # スレッドを閉じるボタン付きのViewを送信
@@ -103,10 +109,6 @@ class ThreadConfirmCloseView(ui.View):
                 await thread.edit(archived=True, reason=f"{interaction.user.display_name} がスレッドを閉じました。")
                 logger.info(f"スレッド '{thread.name}' (ID: {thread.id}) が {interaction.user.display_name} によって閉じられました。")
                 await interaction.followup.send("スレッドを閉じました。", ephemeral=True)
-                # 元のメッセージのボタンを無効化
-                for item in self.children:
-                    item.disabled = True
-                await interaction.message.edit(view=self)
             except discord.Forbidden:
                 logger.error(f"スレッド {thread.id} を閉じる権限がありません。")
                 await interaction.followup.send("スレッドを閉じる権限がありません。", ephemeral=True)
@@ -120,10 +122,6 @@ class ThreadConfirmCloseView(ui.View):
     @ui.button(label="キャンセル", style=discord.ButtonStyle.secondary)
     async def cancel_close(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_message("スレッドを閉じるのをキャンセルしました。", ephemeral=True)
-        # 元のメッセージのボタンを無効化
-        for item in self.children:
-            item.disabled = True
-        await interaction.message.edit(view=self)
         self.stop() # Viewを停止
 
 # ------------------------------------------------------------------------------------
