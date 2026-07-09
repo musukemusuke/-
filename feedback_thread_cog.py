@@ -20,6 +20,9 @@ if BUTTON_CHANNEL_ID == 0:
 # 意見箱入力用モーダル
 # ------------------------------------------------------------------------------------
 class FeedbackInputModal(ui.Modal, title="意見箱への投稿"):
+    def __init__(self, bot: commands.Bot):
+        super().__init__()
+        self.bot = bot
     feedback_text = ui.TextInput(
         label="あなたの意見や要望を記入してください",
         style=discord.TextStyle.paragraph,
@@ -42,11 +45,6 @@ class FeedbackInputModal(ui.Modal, title="意見箱への投稿"):
             thread_name = f"意見箱_{interaction.user.display_name}_{discord.utils.utcnow().strftime('%Y%m%d%H%M')}"
             
             # プライベートスレッドを作成
-            # type=discord.ChannelType.private_thread は現在非推奨。
-            # type=discord.ChannelType.private_thread の代わりに private=True を使用する。
-            # ただし、discord.py 2.xではまだ private=True がサポートされていない可能性があるので、
-            # 現状は type=discord.ChannelType.private_thread を使用する。
-            # もしエラーが出る場合は、discord.pyのバージョンを確認し、private=True に変更を検討する。
             thread = await interaction.channel.create_thread(
                 name=thread_name,
                 type=discord.ChannelType.private_thread, # プライベートスレッド
@@ -67,11 +65,11 @@ class FeedbackInputModal(ui.Modal, title="意見箱への投稿"):
             )
             embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
             embed.add_field(name="投稿者", value=interaction.user.mention, inline=True)
-            embed.add_field(name="スレッド開始日時", value=discord.utils.format_dt(discord.utils.utcnow(), "F"), inline=True)
+            embed.add_field(name="スレッド開始日時", value=discord.utils.utcnow().strftime("%Y/%m/%d %H:%M:%S UTC"), inline=True)
             embed.set_footer(text="このスレッドはあなたと運営者のみが閲覧できます。")
 
             # スレッドを閉じるボタン付きのViewを送信
-            await thread.send(embed=embed, view=ThreadCloseView(thread_starter_id=interaction.user.id))
+            await thread.send(embed=embed, view=ThreadCloseView(bot=self.bot, thread_starter_id=interaction.user.id))
             logger.info(f"スレッド {thread.id} に初期メッセージと閉じるボタンを送信しました。")
 
             await interaction.followup.send(f"意見箱スレッドを作成しました！こちらからどうぞ: {thread.mention}", ephemeral=True)
@@ -91,14 +89,15 @@ class FeedbackInputModal(ui.Modal, title="意見箱への投稿"):
 # スレッドを閉じる確認用View
 # ------------------------------------------------------------------------------------
 class ThreadConfirmCloseView(ui.View):
-    def __init__(self, thread_id: int):
+    def __init__(self, bot: commands.Bot, thread_id: int):
         super().__init__(timeout=60) # 60秒でタイムアウト
+        self.bot = bot
         self.thread_id = thread_id
 
     @ui.button(label="はい、閉じます", style=discord.ButtonStyle.danger)
     async def confirm_close(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.defer(ephemeral=True)
-        thread = interaction.guild.get_channel(self.thread_id)
+        thread = await self.bot.fetch_channel(self.thread_id)
         if thread and isinstance(thread, discord.Thread):
             try:
                 await thread.edit(archived=True, reason=f"{interaction.user.display_name} がスレッドを閉じました。")
@@ -131,15 +130,16 @@ class ThreadConfirmCloseView(ui.View):
 # スレッドを閉じるボタン
 # ------------------------------------------------------------------------------------
 class ThreadCloseView(ui.View):
-    def __init__(self, thread_starter_id: int):
+    def __init__(self, bot: commands.Bot, thread_starter_id: int):
         super().__init__(timeout=None) # 永続View
+        self.bot = bot
         self.thread_starter_id = thread_starter_id
 
     @ui.button(label="スレッドを閉じる", style=discord.ButtonStyle.danger, custom_id="persistent_close_thread_button")
     async def close_thread_button(self, interaction: discord.Interaction, button: ui.Button):
         # スレッド開始者または管理者のみが閉じられるようにする
         if interaction.user.id == self.thread_starter_id or interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("スレッドを閉じます。よろしいですか？", view=ThreadConfirmCloseView(thread_id=interaction.channel_id), ephemeral=True)
+            await interaction.response.send_message("スレッドを閉じます。よろしいですか？", view=ThreadConfirmCloseView(bot=self.bot, thread_id=interaction.channel_id), ephemeral=True)
         else:
             await interaction.response.send_message("このスレッドを閉じられるのは、スレッドの開始者か管理者のみです。", ephemeral=True)
 
@@ -147,12 +147,13 @@ class ThreadCloseView(ui.View):
 # 意見箱ボタン
 # ------------------------------------------------------------------------------------
 class FeedbackButtonView(ui.View):
-    def __init__(self):
+    def __init__(self, bot: commands.Bot):
         super().__init__(timeout=None) # 永続View
+        self.bot = bot
 
     @ui.button(label="意見箱に投稿する", style=discord.ButtonStyle.primary, custom_id="persistent_feedback_button")
     async def feedback_button(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_modal(FeedbackInputModal())
+        await interaction.response.send_modal(FeedbackInputModal(bot=self.bot))
 
 # ------------------------------------------------------------------------------------
 # コグ本体
@@ -166,9 +167,9 @@ class FeedbackThreadCog(commands.Cog):
     async def on_ready(self):
         if not self.persistent_views_added:
             # 永続Viewを登録
-            self.bot.add_view(FeedbackButtonView())
+            self.bot.add_view(FeedbackButtonView(bot=self.bot))
             logger.info("永続View: FeedbackButtonView を登録しました。")
-            self.bot.add_view(ThreadCloseView(thread_starter_id=0)) # thread_starter_id はダミー
+            self.bot.add_view(ThreadCloseView(bot=self.bot, thread_starter_id=0)) # thread_starter_id はダミー
             logger.info("永続View: ThreadCloseView を登録しました。")
             self.persistent_views_added = True
 
@@ -185,7 +186,7 @@ class FeedbackThreadCog(commands.Cog):
             return
 
         try:
-            await channel.send("ご意見・ご要望はこちらからどうぞ！", view=FeedbackButtonView())
+            await channel.send("ご意見・ご要望はこちらからどうぞ！", view=FeedbackButtonView(bot=self.bot))
             await ctx.send("意見箱ボタンを設置しました。", ephemeral=True)
             logger.info(f"意見箱ボタンがチャンネル {channel.name} (ID: {channel.id}) に設置されました。")
         except discord.Forbidden:
