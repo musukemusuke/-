@@ -50,13 +50,7 @@ from utils import metrics
 from role_manager import process_member, process_guild, ensure_personal_roles_exist, cleanup_orphaned_roles
 from health_server import start_health_server
 
-async def load_cogs(bot):
-    # コグを事前にロード
-    try:
-        await bot.load_extension('feedback_thread_cog')
-        logger.info("feedback_thread_cog を正常にロードしました。")
-    except Exception as e:
-        logger.error(f"feedback_thread_cog のロード中にエラーが発生しました: {e}")
+
 
 @bot.event
 async def on_ready():
@@ -129,7 +123,6 @@ setup_voice_events(bot)
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
 
-# 起動前にコグをロード
-asyncio.run(load_cogs(bot))
+
 # Botを起動
 bot.run(DISCORD_TOKEN)
