@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import ui
 import asyncio
+import os
 
 import logging
 
@@ -9,7 +10,11 @@ logger = logging.getLogger(__name__)
 
 # ここにボタンを設置したいチャンネルのIDを設定してください
 # Discordでチャンネルを右クリックし、「IDをコピー」で取得できます。
-BUTTON_CHANNEL_ID = 1520306067865600030
+BUTTON_CHANNEL_ID = int(os.getenv('BUTTON_CHANNEL_ID', '0'))
+if BUTTON_CHANNEL_ID == 0:
+    logger.error("BUTTON_CHANNEL_IDが環境変数に設定されていないか、無効なIDです。意見箱ボタンの設置ができません。")
+    # ここでBotの起動を停止するか、機能を使えなくするなどの対応が必要になる場合があります。
+    # 今回はエラーログを出力するのみとします。
 
 # ------------------------------------------------------------------------------------
 # 意見箱入力用モーダル
