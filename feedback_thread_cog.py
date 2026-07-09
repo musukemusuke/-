@@ -134,7 +134,6 @@ class ThreadCloseView(ui.View):
     def __init__(self, thread_starter_id: int):
         super().__init__(timeout=None) # 永続View
         self.thread_starter_id = thread_starter_id
-        self.add_item(ui.Button(label="スレッドを閉じる", style=discord.ButtonStyle.danger, custom_id="persistent_close_thread_button"))
 
     @ui.button(label="スレッドを閉じる", style=discord.ButtonStyle.danger, custom_id="persistent_close_thread_button")
     async def close_thread_button(self, interaction: discord.Interaction, button: ui.Button):
