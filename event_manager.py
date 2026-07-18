@@ -27,19 +27,37 @@ async def handle_event_start(bot, message, event_name):
         return
     
     try:
-        # チャンネル名を「【ｲﾍﾞﾝﾄ開催中】「イベント名」」の形式に整形
-        # Discordのチャンネル名で使用可能な記号に調整し、スペースをアンダースコアに置換
         safe_event_name = event_name.replace(' ', '_')
-        display_channel_name = f"【ｲﾍﾞﾝﾄ開催中】{safe_event_name}"
-        # Discordのチャンネル名の文字数制限(100文字)に収める
+        display_channel_name = f"「{safe_event_name}」"
         if len(display_channel_name) > 100:
             display_channel_name = display_channel_name[:97] + "..."
         
-        # 新しいテキストチャンネルを作成（カテゴリーなし、サーバーの一番上に配置）
+        category = discord.utils.get(guild.categories, name="イベント開催中")
+        if category is None:
+            category = await guild.create_category("イベント開催中")
+        
+        await set_permissions_with_retry(
+            category, 
+            guild.default_role, 
+            {"send_messages": False},
+            logger=logger
+        )
+        for member in guild.members:
+            if member.bot:
+                continue
+            for role in member.roles:
+                if role.is_default():
+                    continue
+                await set_permissions_with_retry(
+                    category, 
+                    role, 
+                    {"send_messages": False},
+                    logger=logger
+                )
+        
         new_channel = await guild.create_text_channel(
             name=display_channel_name,
-            topic=f"イベント: {event_name} | 作成者: {message.author.display_name} | 終了するには!event_end",
-            position=0  # 一番上に配置
+            category=category
         )
         
         # @everyoneの書き込み権限を無効に設定
