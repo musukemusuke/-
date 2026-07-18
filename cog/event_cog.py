@@ -117,12 +117,9 @@ class EventManagementCog(commands.Cog):
             logger.info(f"ギルド {interaction.guild.name} で管理者が手動同期を実行しました")
         except Exception as e:
             await interaction.edit_original_response(content=f"❌ 同期に失敗しました: {str(e)}")
-
-# 必須のsetup関数：CogをBotにロードするために必要
-async def setup(bot: commands.Bot):
-    await bot.add_cog(EventManagementCog(bot))
             logger.error(f"手動同期中にエラーが発生しました: {e}")
 
+# 必須のsetup関数：CogをBotにロードするために必要
 async def setup(bot: commands.Bot):
     await bot.add_cog(EventManagementCog(bot))
     logger.info("EventManagementCogが正常にロードされました")
