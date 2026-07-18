@@ -48,11 +48,15 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # utilsからメトリクスをインポート
 from utils import metrics
 from role_manager import process_member, process_guild, ensure_personal_roles_exist, cleanup_orphaned_roles
+from event_manager import register_event_commands
 
 
 
 @bot.event
 async def on_ready():
+    # イベント管理コマンドを登録
+    await register_event_commands(bot)
+    
     logger.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
     logger.info('Botが正常に起動しました！')
     logger.info('------')
