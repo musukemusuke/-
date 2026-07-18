@@ -35,7 +35,7 @@ async def handle_event_start(bot, message, event_name):
         category = discord.utils.get(guild.categories, name="イベント開催中")
         if category is None:
             pin_category = next((c for c in guild.categories if "📌" in c.name), None)
-            pos = (pin_category.position - 1) if pin_category else 0
+            pos = max(0, pin_category.position - 1)
             category = await guild.create_category("イベント開催中", position=pos)
         
         await set_permissions_with_retry(
