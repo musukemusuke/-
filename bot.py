@@ -46,57 +46,24 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # 最初に全てのモジュールをインポート
-from utils import metrics
-from role_manager import process_member, process_guild, ensure_personal_roles_exist, cleanup_orphaned_roles
-from health_server import start_health_server
-from event_manager import register_event_commands
-
-# 起動前にコマンドを登録する公式推奨のsetup_hook
+# 全てのCogをロードするsetup_hook
 async def setup_hook():
-    # イベント管理用コマンドを事前に登録
-    await register_event_commands(bot)
-    logger.info("イベント管理コマンドの事前登録が完了しました")
+    # 機能ごとに独立したCogを順番にロード
+    await bot.load_extension('health_cog')      # ヘルスチェック
+    await bot.load_extension('role_cog')       # 個人ロール管理
+    await bot.load_extension('voice_cog')      # ボイスチャンネル管理
+    await bot.load_extension('event_cog')      # イベントチャンネル管理
+    logger.info("✅ 全てのCogが正常にロードされました")
 
 bot.setup_hook = setup_hook
 
 
-
+# 最小限のコアロジックだけをbot.pyに残す
 @bot.event
 async def on_ready():
     logger.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
     logger.info('Botが正常に起動しました！')
     logger.info('------')
-    
-    # ヘルスチェックサーバーを起動
-    await start_health_server(logger)
-
-    # 全ギルドの処理を並列実行
-    guild_tasks = [process_guild(bot, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID) for guild in bot.guilds]
-    await asyncio.gather(*guild_tasks)
-
-    # 起動時に一度だけ孤立した個人ロールを即座にクリーンアップ
-    await cleanup_orphaned_roles(bot)
-
-    # 定期タスクの開始
-    bot.loop.create_task(ensure_personal_roles_exist(bot, read_only_channel_ids, ARCHIVE_CHANNEL_ID))
-    bot.loop.create_task(cleanup_orphaned_roles(bot))
-
-    # 読み取り専用チャンネルの権限設定を明示的に実行
-    for guild in bot.guilds:
-        logger.info(f"ギルド {guild.name} の読み取り専用チャンネル権限を設定しています...")
-        logger.debug(f"READ_ONLY_CHANNEL_IDS: {read_only_channel_ids}") # デバッグログ
-        for channel_id in read_only_channel_ids:
-            channel = guild.get_channel(channel_id)
-            if channel:
-                logger.debug(f"チャンネル {channel.name} ({channel.id}) の @everyone 権限設定を試みます。") # デバッグログ
-                try:
-                    # @everyoneロールのメッセージ送信権限を無効にする
-                    await set_permissions_with_retry(channel, guild.default_role, {"send_messages": False})
-                    logger.info(f"チャンネル {channel.name} ({channel.id}) を @everyone に対して読み取り専用に設定しました。")
-                except Exception as e:
-                    logger.error(f"チャンネル {channel.name} ({channel.id}) の @everyone 読み取り専用設定に失敗しました: {e}")
-            else:
-                logger.warning(f"読み取り専用チャンネルID {channel_id} がギルド {guild.name} で見つかりませんでした。")
     
     # 登録されているコマンドの一覧を最初にログに出力（デバッグ用）
     registered_commands = [cmd.name for cmd in bot.tree.get_commands()]
@@ -115,42 +82,6 @@ async def on_ready():
             await bot.tree.sync(guild=discord.Object(id=guild.id))
             logger.info(f"✅ ギルド {guild.name} ({guild.id}) にスラッシュコマンドを個別同期しました")
         logger.info("✅ 全てのサーバーへのスラッシュコマンド同期が完了しました")
-
-
-@bot.event
-async def on_member_join(member):
-    # メンバーシップスクリーニングに対応するため、参加時の自動処理は行わない
-    # ルール同意後の on_member_update で処理する
-    logger.info(f"メンバー {member.display_name} がサーバーに参加しました。ルール同意後にロールを付与します。")
-    pass
-
-@bot.event
-async def on_member_update(before, after):
-    # Bot自身が更新された場合はスキップ
-    if after.bot:
-        return
-
-    guild = after.guild
-
-    # メンバーシップスクリーニングをパスしたことを検知
-    if before.pending and not after.pending:
-        logger.info(f"メンバー {after.display_name} がサーバーのルールに同意しました。個人ロールの処理を開始します。")
-        await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
-
-    # ニックネームが変更された場合も個人ロールを更新
-    elif before.display_name != after.display_name:
-        logger.info(f"メンバー {before.display_name} のニックネームが {after.display_name} に変更されました。個人ロールの更新を試みます。")
-        await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID, old_display_name=before.display_name)
-
-    # ニックネームは変更されていないが、ロールが変更された場合
-    elif before.roles != after.roles:
-        logger.info(f"メンバー {after.display_name} のロールが変更されました。個人ロールの状態を再確認します。")
-        await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
-
-
-
-# ボイスイベントをセットアップ
-setup_voice_events(bot)
 
 if not DISCORD_TOKEN:
     raise ValueError("環境変数にDISCORD_TOKENが設定されていません。.envファイルを確認してください。")
