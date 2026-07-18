@@ -34,7 +34,7 @@ async def handle_event_start(bot, message, event_name):
         
         category = discord.utils.get(guild.categories, name="イベント開催中")
         if category is None:
-            category = await guild.create_category("イベント開催中")
+            category = await guild.create_category("イベント開催中", position=0)
         
         await set_permissions_with_retry(
             category, 
@@ -125,9 +125,10 @@ async def handle_event_end(bot, message):
     if channel_id not in active_events:
         channel = message.channel
         category = getattr(channel, "category", None)
-        if category and category.name == "イベント開催中":
+        if category and category.name.strip() == "イベント開催中":
             active_events[channel_id] = None
         else:
+            logger.warning(f"イベント終了失敗: category={getattr(category, 'name', None)}, channel={channel.name}")
             await message.channel.send("このチャンネルはイベントチャンネルではないか、既に終了しています。")
             return
     
