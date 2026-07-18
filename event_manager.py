@@ -15,13 +15,10 @@ active_event_channel_id = None
 event_owner_id = None
 
 async def register_event_commands(bot):
-    """イベント管理用のスラッシュコマンドを登録（ギルド限定で即時反映）"""
-    guild = discord.Object(id=GUILD_ID) if GUILD_ID else None
+    """イベント管理用のスラッシュコマンドを登録"""
+    logger.info("イベント管理用のスラッシュコマンドを登録します")
     
-    if guild:
-        logger.info(f"ギルドID {GUILD_ID} に限定してスラッシュコマンドを登録します（即時反映用）")
-    
-    @bot.tree.command(name="hajimeru", description="イベント用のチャンネルを作成して開始します", guild=guild)
+    @bot.tree.command(name="hajimeru", description="イベント用のチャンネルを作成して開始します")
     async def hajimeru_command(interaction: discord.Interaction, content: str):
         global active_event_channel_id, event_owner_id
         
@@ -89,7 +86,7 @@ async def register_event_commands(bot):
             await interaction.edit_original_response(content=f"❌ イベントチャンネルの作成に失敗しました: {str(e)}")
 
 
-    @bot.tree.command(name="owari", description="アクティブなイベントチャンネルを終了・削除します", guild=guild)
+    @bot.tree.command(name="owari", description="アクティブなイベントチャンネルを終了・削除します")
     async def owari_command(interaction: discord.Interaction):
         global active_event_channel_id, event_owner_id
         

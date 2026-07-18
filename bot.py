@@ -94,12 +94,11 @@ async def on_ready():
     await register_event_commands(bot)
     logger.info("イベント管理コマンドの登録が完了しました")
     
-    # その後で全てのコマンドをDiscordに同期
-    await bot.tree.sync()
-    # 各ギルドにも個別に同期して即時反映させる
-    for guild in bot.guilds:
-        await bot.tree.sync(guild=discord.Object(id=guild.id))
-        logger.info(f"ギルド {guild.name} ({guild.id}) にスラッシュコマンドを同期しました")
+    # 特定のギルドにだけスラッシュコマンドを同期（即時反映）
+    TARGET_GUILD_ID = 1518079520911921192
+    target_guild = discord.Object(id=TARGET_GUILD_ID)
+    await bot.tree.sync(guild=target_guild)
+    logger.info(f"対象ギルドID {TARGET_GUILD_ID} にスラッシュコマンドを同期しました（即時反映）")
     logger.info("全てのスラッシュコマンドの同期が完了しました")
 
 
