@@ -127,3 +127,24 @@ async def register_event_commands(bot):
         except Exception as e:
             logger.error(f"イベントチャンネルの削除中にエラーが発生しました: {e}")
             await interaction.edit_original_response(content=f"❌ イベントチャンネルの削除に失敗しました: {str(e)}")
+
+    # 管理者用手動同期コマンド（コマンドが表示されない場合に実行）
+    @bot.tree.command(name="sync", description="スラッシュコマンドを手動で同期します（管理者のみ）")
+    @discord.app_commands.guild_only()
+    async def sync_commands(interaction: discord.Interaction):
+        # 管理者のみ実行可能
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("このコマンドは管理者のみ実行できます。", ephemeral=True)
+            return
+        
+        await interaction.response.send_message("コマンドを同期中です...", ephemeral=True)
+        
+        try:
+            # グローバル同期と現在のギルドへの同期を実行
+            await bot.tree.sync()
+            await bot.tree.sync(guild=discord.Object(id=interaction.guild_id))
+            await interaction.edit_original_response(content="✅ コマンドの同期が完了しました！数分以内にコマンド欄に表示されます。")
+            logger.info(f"ギルド {interaction.guild.name} で管理者が手動同期を実行しました")
+        except Exception as e:
+            await interaction.edit_original_response(content=f"❌ 同期に失敗しました: {str(e)}")
+            logger.error(f"手動同期中にエラーが発生しました: {e}")
