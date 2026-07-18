@@ -46,10 +46,11 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # 最初に全てのモジュールをインポート
+from health_server import start_health_server
+
 # 全てのCogをロードするsetup_hook
 async def setup_hook():
     # 機能ごとに独立したCogを順番にロード
-    await bot.load_extension('health_cog')      # ヘルスチェック
     await bot.load_extension('role_cog')       # 個人ロール管理
     await bot.load_extension('voice_cog')      # ボイスチャンネル管理
     await bot.load_extension('event_cog')      # イベントチャンネル管理
@@ -64,6 +65,9 @@ async def on_ready():
     logger.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
     logger.info('Botが正常に起動しました！')
     logger.info('------')
+    
+    # ヘルスチェックサーバーを最初に起動（競合防止）
+    await start_health_server(logger)
     
     # 登録されているコマンドの一覧を最初にログに出力（デバッグ用）
     registered_commands = [cmd.name for cmd in bot.tree.get_commands()]
