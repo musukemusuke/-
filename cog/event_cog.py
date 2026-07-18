@@ -15,7 +15,6 @@ class EventManagementCog(commands.Cog):
         global event_owner_id
 
     @discord.app_commands.command(name="hajimeru", description="イベントチャンネルを作成します")
-    @discord.app_commands.guild_only()
     async def start_event(self, interaction: discord.Interaction, content: str):
         # 既存のイベントチャンネルが存在する場合はエラー
         global active_event_channel_id
@@ -64,7 +63,6 @@ class EventManagementCog(commands.Cog):
             await interaction.edit_original_response(content=f"❌ イベントチャンネルの作成に失敗しました: {str(e)}")
 
     @discord.app_commands.command(name="owari", description="イベントチャンネルを削除します")
-    @discord.app_commands.guild_only()
     async def end_event(self, interaction: discord.Interaction):
         global active_event_channel_id, event_owner_id
         if active_event_channel_id is None:
