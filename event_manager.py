@@ -28,7 +28,7 @@ async def handle_event_start(bot, message, event_name):
     
     try:
         safe_event_name = event_name.replace(' ', '_')
-        display_channel_name = f"「{safe_event_name}」"
+        display_channel_name = safe_event_name
         if len(display_channel_name) > 100:
             display_channel_name = display_channel_name[:97] + "..."
         
@@ -57,7 +57,8 @@ async def handle_event_start(bot, message, event_name):
         
         new_channel = await guild.create_text_channel(
             name=display_channel_name,
-            category=category
+            category=category,
+            position=0
         )
         
         # @everyoneの書き込み権限を無効に設定
@@ -122,8 +123,13 @@ async def handle_event_end(bot, message):
     
     # このチャンネルがアクティブなイベントか確認
     if channel_id not in active_events:
-        await message.channel.send("このチャンネルはイベントチャンネルではないか、既に終了しています。")
-        return
+        channel = message.channel
+        category = getattr(channel, "category", None)
+        if category and category.name == "イベント開催中":
+            active_events[channel_id] = None
+        else:
+            await message.channel.send("このチャンネルはイベントチャンネルではないか、既に終了しています。")
+            return
     
     # イベントの作成者か、サーバーの管理者か確認
     creator_id = active_events[channel_id]
@@ -149,14 +155,16 @@ async def handle_event_end(bot, message):
     
     try:
         # アクティブイベントから削除
+        category = message.channel.category
         del active_events[channel_id]
         
-        # チャンネルを削除する前に通知
         await message.channel.send("このイベントチャンネルを5秒後に削除します...")
         await asyncio.sleep(5)
         
-        # チャンネルを削除
         await message.channel.delete()
+        
+        if category and len(category.channels) == 0:
+            await category.delete()
         
         logger.info(f"イベントチャンネル {message.channel.name} を {message.author} が終了しました")
         
