@@ -30,7 +30,7 @@ async def handle_event_start(bot, message, event_name):
         # チャンネル名を「【ｲﾍﾞﾝﾄ開催中】「イベント名」」の形式に整形
         # Discordのチャンネル名で使用可能な記号に調整し、スペースをアンダースコアに置換
         safe_event_name = event_name.replace(' ', '_')
-        display_channel_name = f"【ｲﾍﾞﾝﾄ開催中】「{safe_event_name}」"
+        display_channel_name = f"【ｲﾍﾞﾝﾄ開催中】{safe_event_name}"
         # Discordのチャンネル名の文字数制限(100文字)に収める
         if len(display_channel_name) > 100:
             display_channel_name = display_channel_name[:97] + "..."
