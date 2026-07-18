@@ -10,9 +10,6 @@ active_events = {}
 
 async def handle_event_start(bot, message, event_name):
     """!event_start コマンドの処理 - イベント用チャンネルを作成"""
-    if not event_name:
-        await message.channel.send("イベント名を指定してください。例: `!event_start 読書会`")
-        return
     
     guild = message.guild
     if not guild:
@@ -97,20 +94,16 @@ async def handle_event_end(bot, message):
 
 async def register_event_commands(bot):
     """botにイベントコマンドを登録"""
-    @bot.listen()
-    async def on_message(message):
-        # bot自身のメッセージは無視
-        if message.author == bot.user:
+    # discord.pyのコマンドとして登録することでCommandNotFoundエラーを回避
+    @bot.command(name='event_start')
+    async def event_start(ctx, *, event_name: str = None):
+        """!event_start イベント名 - イベントチャンネルを作成"""
+        if event_name is None:
+            await ctx.send("イベント名を指定してください。例: `!event_start 読書会`")
             return
-        
-        # メッセージをコマンドとして処理
-        if message.content.startswith('!event_start'):
-            # コマンドの後のイベント名を抽出
-            parts = message.content.split(maxsplit=1)
-            event_name = parts[1].strip() if len(parts) > 1 else ""
-            await handle_event_start(bot, message, event_name)
-            return
-        
-        elif message.content.startswith('!event_end'):
-            await handle_event_end(bot, message)
-            return
+        await handle_event_start(bot, ctx.message, event_name)
+    
+    @bot.command(name='event_end')
+    async def event_end(ctx):
+        """!event_end - 現在のイベントチャンネルを終了"""
+        await handle_event_end(bot, ctx.message)
