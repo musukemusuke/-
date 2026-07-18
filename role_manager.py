@@ -157,6 +157,11 @@ async def process_member(bot, member, guild, read_only_channel_ids, archive_chan
     if target_role:
         if archive_channel_id != 0:
             for channel in guild.channels:
+                # テキストチャンネルかつ、@everyoneが閲覧できないプライベートチャンネルは自動権限設定の対象外にする
+                if isinstance(channel, discord.TextChannel) and not channel.permissions_for(guild.default_role).view_channel:
+                    logger.debug(f"チャンネル {channel.name} はプライベートなテキストチャンネルのため、自動権限設定をスキップします。")
+                    continue
+
                 if channel.id == archive_channel_id:
                     continue
                 if channel.id in read_only_channel_ids:
