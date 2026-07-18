@@ -89,9 +89,13 @@ async def on_ready():
             else:
                 logger.warning(f"読み取り専用チャンネルID {channel_id} がギルド {guild.name} で見つかりませんでした。")
     
-    # スラッシュコマンドをDiscordに同期
+    # スラッシュコマンドをDiscordに同期（グローバル+各ギルドに即時反映）
     await bot.tree.sync()
-    logger.info("スラッシュコマンドを正常に同期しました")
+    # 各ギルドにも個別に同期して即時反映させる
+    for guild in bot.guilds:
+        await bot.tree.sync(guild=discord.Object(id=guild.id))
+        logger.info(f"ギルド {guild.name} ({guild.id}) にスラッシュコマンドを同期しました")
+    logger.info("全てのスラッシュコマンドの同期が完了しました")
 
 
 @bot.event
