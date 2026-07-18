@@ -94,7 +94,9 @@ async def on_ready():
     await register_event_commands(bot)
     logger.info("イベント管理コマンドの登録が完了しました")
     
-    # 特定のギルドにだけスラッシュコマンドを同期（即時反映）
+    # まずグローバルコマンドをクリーンアップ（古いコマンドを削除）
+    await bot.tree.sync()
+    # ギルド限定コマンドを正しく同期（公式推奨の方法）
     TARGET_GUILD_ID = 1518079520911921192
     target_guild = discord.Object(id=TARGET_GUILD_ID)
     await bot.tree.sync(guild=target_guild)
