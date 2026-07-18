@@ -36,15 +36,12 @@ async def handle_event_start(bot, message, event_name):
         pin_category = next((c for c in guild.categories if "📌" in c.name), None)
         target_pos = max(0, pin_category.position - 1) if pin_category else 0
         
-        logger.info(f"カテゴリー配置: pin={pin_category.name if pin_category else 'なし'} pos={pin_category.position if pin_category else 'N/A'}, target={target_pos}, existing={category.position if category else 'なし'}")
-        
         if category is None:
             category = await guild.create_category("イベント開催中")
         
         try:
             if category.position != target_pos:
                 await category.edit(position=target_pos)
-                logger.info(f"カテゴリーをposition={target_pos}に移動しました")
         except Exception as e:
             logger.warning(f"カテゴリー位置の変更に失敗: {e}")
         
