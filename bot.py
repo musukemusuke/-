@@ -100,6 +100,11 @@ async def on_ready():
     
     # スラッシュコマンドをDiscordに同期（グローバル+各ギルドに即時反映）
     await bot.tree.sync()
+    # 登録されているコマンドの一覧をログに出力（デバッグ用）
+    registered_commands = [cmd.name for cmd in bot.tree.get_commands()]
+    logger.info(f"コード上に登録されている全コマンド: {registered_commands}")
+    logger.info(f"登録されているコマンド数: {len(registered_commands)}")
+    
     # 全ギルドにスラッシュコマンドを同期（setup_hookで事前登録済み）
     await bot.tree.sync()
     # 各ギルドに個別に同期して即時反映（全サーバーで数分以内に表示）
