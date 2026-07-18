@@ -52,11 +52,11 @@ from event_manager import register_event_commands
 
 
 
+# イベント管理コマンドを登録
+register_event_commands(bot)
+
 @bot.event
 async def on_ready():
-    # イベント管理コマンドを登録
-    await register_event_commands(bot)
-    
     logger.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
     logger.info('Botが正常に起動しました！')
     logger.info('------')

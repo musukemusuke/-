@@ -92,7 +92,7 @@ async def handle_event_end(bot, message):
         await message.channel.send("チャンネルの削除中にエラーが発生しました。")
         logger.error(f"イベントチャンネル削除中にエラーが発生: {e}")
 
-async def register_event_commands(bot):
+def register_event_commands(bot):
     """botにイベントコマンドを登録"""
     # discord.pyのコマンドとして登録することでCommandNotFoundエラーを回避
     @bot.command(name='event_start')
