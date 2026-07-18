@@ -136,6 +136,25 @@ async def on_member_update(before, after):
 
 
 
+# 手動同期用のテキストコマンド（管理者専用）
+@bot.command()
+async def sync(ctx):
+    """管理者専用：スラッシュコマンドを手動で同期する"""
+    # コマンド実行者が管理者か確認
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("このコマンドは管理者専用です。", ephemeral=True)
+        return
+    
+    TARGET_GUILD_ID = 1518079520911921192
+    target_guild = discord.Object(id=TARGET_GUILD_ID)
+    
+    # まずグローバルコマンドをクリーンアップ
+    await bot.tree.sync()
+    # ギルド限定で同期
+    await bot.tree.sync(guild=target_guild)
+    await ctx.send(f"✅ ギルドID {TARGET_GUILD_ID} にスラッシュコマンドを手動で同期しました！数秒以内にコマンドが表示されます。")
+    logger.info("管理者によって手動同期が実行されました")
+
 # ボイスイベントをセットアップ
 setup_voice_events(bot)
 
