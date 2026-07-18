@@ -33,14 +33,20 @@ async def handle_event_start(bot, message, event_name):
             display_channel_name = display_channel_name[:97] + "..."
         
         category = discord.utils.get(guild.categories, name="イベント開催中")
+        pin_category = next((c for c in guild.categories if "📌" in c.name), None)
+        target_pos = max(0, pin_category.position - 1) if pin_category else 0
+        
+        logger.info(f"カテゴリー配置: pin={pin_category.name if pin_category else 'なし'} pos={pin_category.position if pin_category else 'N/A'}, target={target_pos}, existing={category.position if category else 'なし'}")
+        
         if category is None:
-            pin_category = next((c for c in guild.categories if "📌" in c.name), None)
-            pos = max(0, pin_category.position - 1) if pin_category else 0
-            category = await guild.create_category("イベント開催中", position=pos)
-        else:
-            pin_category = next((c for c in guild.categories if "📌" in c.name), None)
-            if pin_category and category.position != pin_category.position - 1:
-                await category.edit(position=max(0, pin_category.position - 1))
+            category = await guild.create_category("イベント開催中")
+        
+        try:
+            if category.position != target_pos:
+                await category.edit(position=target_pos)
+                logger.info(f"カテゴリーをposition={target_pos}に移動しました")
+        except Exception as e:
+            logger.warning(f"カテゴリー位置の変更に失敗: {e}")
         
         await set_permissions_with_retry(
             category, 
