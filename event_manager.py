@@ -1,6 +1,7 @@
 import discord
 import logging
 import asyncio
+from utils import set_permissions_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,10 @@ async def handle_event_start(bot, message, event_name):
         return
     
     try:
-        # チャンネル名を「ｲﾍﾞﾝﾄ開催中_イベント名」の形式に整形（全角スペースをアンダースコアに置換）
-        display_channel_name = f"ｲﾍﾞﾝﾄ開催中_{event_name.replace(' ', '_')}"
+        # チャンネル名を「【ｲﾍﾞﾝﾄ開催中】「イベント名」」の形式に整形
+        # Discordのチャンネル名で使用可能な記号に調整し、スペースをアンダースコアに置換
+        safe_event_name = event_name.replace(' ', '_')
+        display_channel_name = f"【ｲﾍﾞﾝﾄ開催中】「{safe_event_name}」"
         # Discordのチャンネル名の文字数制限(100文字)に収める
         if len(display_channel_name) > 100:
             display_channel_name = display_channel_name[:97] + "..."
@@ -39,13 +42,54 @@ async def handle_event_start(bot, message, event_name):
             position=0  # 一番上に配置
         )
         
+        # @everyoneの書き込み権限を無効に設定
+        await set_permissions_with_retry(
+            new_channel, 
+            guild.default_role, 
+            {"send_messages": False},
+            logger=logger
+        )
+        
+        # サーバー内の全てのメンバーの個人ロールを取得し、作成者以外の書き込み権限を無効に
+        for member in guild.members:
+            if member.bot:
+                continue
+            # 作成者自身はスキップ
+            if member.id == message.author.id:
+                continue
+            # メンバーが持っている個人ロールを全て取得
+            for role in member.roles:
+                # デフォルトの@everyoneロールは既に処理済みなのでスキップ
+                if role.is_default():
+                    continue
+                # 個人ロールに対して書き込み権限を無効に設定
+                await set_permissions_with_retry(
+                    new_channel, 
+                    role, 
+                    {"send_messages": False},
+                    logger=logger
+                )
+        
+        # イベントの作成者には書き込み権限を付与
+        await set_permissions_with_retry(
+            new_channel, 
+            message.author, 
+            {"send_messages": True},
+            logger=logger
+        )
+        
         # アクティブなイベントとして記録
         active_events[new_channel.id] = message.author.id
         
-        # 作成者に簡単な通知だけを送信（チャンネルへの自動投稿は行わない）
-        await message.channel.send(f"イベントチャンネル {new_channel.mention} を作成しました。\n終了するときはそのチャンネルで `!event_end` と入力してください。")
+        logger.info(f"イベントチャンネル {display_channel_name} を {message.author} が作成しました（作成者には書き込み権限を付与）")
         
-        logger.info(f"イベントチャンネル {display_channel_name} を {message.author} が作成しました")
+        # コマンドを実行したメッセージ自体を削除
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            logger.warning(f"コマンドメッセージの削除権限がないため、!event_startのメッセージを削除できませんでした")
+        except Exception as e:
+            logger.error(f"コマンドメッセージ削除中にエラーが発生: {e}")
         
     except discord.Forbidden:
         await message.channel.send("チャンネルを作成する権限がありません。")
@@ -69,8 +113,21 @@ async def handle_event_end(bot, message):
     is_admin = any(role.permissions.administrator for role in message.author.roles)
     
     if not (is_creator or is_admin):
+        # コマンドメッセージを削除してからエラー通知
+        try:
+            await message.delete()
+        except:
+            pass
         await message.channel.send("このイベントを終了できるのは作成者または管理者のみです。")
         return
+    
+    # コマンドを実行したメッセージ自体を削除
+    try:
+        await message.delete()
+    except discord.Forbidden:
+        logger.warning(f"コマンドメッセージの削除権限がないため、!event_endのメッセージを削除できませんでした")
+    except Exception as e:
+        logger.error(f"コマンドメッセージ削除中にエラーが発生: {e}")
     
     try:
         # アクティブイベントから削除
