@@ -92,11 +92,10 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member):
-    # Botは処理をスキップ
-    if member.bot:
-        return
-    guild = member.guild
-    await process_member(bot, member, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
+    # メンバーシップスクリーニングに対応するため、参加時の自動処理は行わない
+    # ルール同意後の on_member_update で処理する
+    logger.info(f"メンバー {member.display_name} がサーバーに参加しました。ルール同意後にロールを付与します。")
+    pass
 
 @bot.event
 async def on_member_update(before, after):
@@ -105,8 +104,14 @@ async def on_member_update(before, after):
         return
 
     guild = after.guild
+
+    # メンバーシップスクリーニングをパスしたことを検知
+    if before.pending and not after.pending:
+        logger.info(f"メンバー {after.display_name} がサーバーのルールに同意しました。個人ロールの処理を開始します。")
+        await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
+
     # ニックネームが変更された場合も個人ロールを更新
-    if before.display_name != after.display_name:
+    elif before.display_name != after.display_name:
         logger.info(f"メンバー {before.display_name} のニックネームが {after.display_name} に変更されました。個人ロールの更新を試みます。")
         await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID, old_display_name=before.display_name)
 
