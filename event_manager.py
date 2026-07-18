@@ -128,7 +128,7 @@ async def register_event_commands(bot):
             logger.error(f"イベントチャンネルの削除中にエラーが発生しました: {e}")
             await interaction.edit_original_response(content=f"❌ イベントチャンネルの削除に失敗しました: {str(e)}")
 
-    # 管理者用手動同期コマンド（コマンドが表示されない場合に実行）
+    # 管理者用手動同期コマンド（/owariと同じインデントレベル：register_event_commands関数の内側）
     @bot.tree.command(name="sync", description="スラッシュコマンドを手動で同期します（管理者のみ）")
     @discord.app_commands.guild_only()
     async def sync_commands(interaction: discord.Interaction):
