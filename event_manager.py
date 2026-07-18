@@ -140,7 +140,7 @@ async def handle_event_end(bot, message):
     
     # イベントの作成者か、サーバーの管理者か確認
     creator_id = active_events[channel_id]
-    is_creator = message.author.id == creator_id
+    is_creator = creator_id is None or message.author.id == creator_id
     is_admin = any(role.permissions.administrator for role in message.author.roles)
     
     if not (is_creator or is_admin):
