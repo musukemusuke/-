@@ -45,6 +45,12 @@ intents.message_content = True
 # コマンド機能を使わないため、基本的なdiscord.Clientを使用
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# 最初に全てのモジュールをインポート
+from utils import metrics
+from role_manager import process_member, process_guild, ensure_personal_roles_exist, cleanup_orphaned_roles
+from health_server import start_health_server
+from event_manager import register_event_commands
+
 # 起動前にコマンドを登録する公式推奨のsetup_hook
 async def setup_hook():
     # イベント管理用コマンドを事前に登録
@@ -52,12 +58,6 @@ async def setup_hook():
     logger.info("イベント管理コマンドの事前登録が完了しました")
 
 bot.setup_hook = setup_hook
-
-# utilsからメトリクスをインポート
-from utils import metrics
-from role_manager import process_member, process_guild, ensure_personal_roles_exist, cleanup_orphaned_roles
-from health_server import start_health_server
-from event_manager import register_event_commands
 
 
 
@@ -98,20 +98,23 @@ async def on_ready():
             else:
                 logger.warning(f"読み取り専用チャンネルID {channel_id} がギルド {guild.name} で見つかりませんでした。")
     
-    # スラッシュコマンドをDiscordに同期（グローバル+各ギルドに即時反映）
-    await bot.tree.sync()
-    # 登録されているコマンドの一覧をログに出力（デバッグ用）
+    # 登録されているコマンドの一覧を最初にログに出力（デバッグ用）
     registered_commands = [cmd.name for cmd in bot.tree.get_commands()]
-    logger.info(f"コード上に登録されている全コマンド: {registered_commands}")
-    logger.info(f"登録されているコマンド数: {len(registered_commands)}")
+    logger.info(f"✅ コード上に登録されている全スラッシュコマンド: {registered_commands}")
+    logger.info(f"✅ 登録されているコマンド数: {len(registered_commands)}")
     
-    # 全ギルドにスラッシュコマンドを同期（setup_hookで事前登録済み）
-    await bot.tree.sync()
-    # 各ギルドに個別に同期して即時反映（全サーバーで数分以内に表示）
-    for guild in bot.guilds:
-        await bot.tree.sync(guild=discord.Object(id=guild.id))
-        logger.info(f"ギルド {guild.name} ({guild.id}) にスラッシュコマンドを同期しました")
-    logger.info("全てのスラッシュコマンドの同期が完了しました")
+    if len(registered_commands) == 0:
+        logger.error("❌ コマンドが一つも登録されていません！setup_hookが正常に実行されなかった可能性があります")
+    else:
+        # グローバル同期を実行
+        await bot.tree.sync()
+        logger.info("✅ グローバルスラッシュコマンドの同期が完了しました")
+        
+        # 各ギルドに個別に同期して即時反映（全サーバーで数分以内に表示）
+        for guild in bot.guilds:
+            await bot.tree.sync(guild=discord.Object(id=guild.id))
+            logger.info(f"✅ ギルド {guild.name} ({guild.id}) にスラッシュコマンドを個別同期しました")
+        logger.info("✅ 全てのサーバーへのスラッシュコマンド同期が完了しました")
 
 
 @bot.event
