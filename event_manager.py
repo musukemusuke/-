@@ -12,6 +12,7 @@ async def register_event_commands(bot):
     """イベント管理用のスラッシュコマンドを登録"""
     
     @bot.tree.command(name="hajimeru", description="イベント用のチャンネルを作成して開始します")
+    @discord.app_commands.guild_only()  # サーバー内でのみ表示・使用可能に設定
     async def hajimeru_command(interaction: discord.Interaction, content: str):
         global active_event_channel_id, event_owner_id
         
@@ -80,6 +81,7 @@ async def register_event_commands(bot):
 
 
     @bot.tree.command(name="owari", description="アクティブなイベントチャンネルを終了・削除します")
+    @discord.app_commands.guild_only()  # サーバー内でのみ表示・使用可能に設定
     async def owari_command(interaction: discord.Interaction):
         global active_event_channel_id, event_owner_id
         

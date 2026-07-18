@@ -45,6 +45,14 @@ intents.message_content = True
 # コマンド機能を使わないため、基本的なdiscord.Clientを使用
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# 起動前にコマンドを登録する公式推奨のsetup_hook
+async def setup_hook():
+    # イベント管理用コマンドを事前に登録
+    await register_event_commands(bot)
+    logger.info("イベント管理コマンドの事前登録が完了しました")
+
+bot.setup_hook = setup_hook
+
 # utilsからメトリクスをインポート
 from utils import metrics
 from role_manager import process_member, process_guild, ensure_personal_roles_exist, cleanup_orphaned_roles
@@ -92,13 +100,9 @@ async def on_ready():
     
     # スラッシュコマンドをDiscordに同期（グローバル+各ギルドに即時反映）
     await bot.tree.sync()
-    # 先にイベント管理用コマンドを登録してから同期する
-    await register_event_commands(bot)
-    logger.info("イベント管理コマンドの登録が完了しました")
-    
-    # グローバルコマンドとして全ギルドに同期
+    # 全ギルドにスラッシュコマンドを同期（setup_hookで事前登録済み）
     await bot.tree.sync()
-    # 各ギルドにも個別に同期して即時反映させる（全サーバーで即時表示）
+    # 各ギルドに個別に同期して即時反映（全サーバーで数分以内に表示）
     for guild in bot.guilds:
         await bot.tree.sync(guild=discord.Object(id=guild.id))
         logger.info(f"ギルド {guild.name} ({guild.id}) にスラッシュコマンドを同期しました")
