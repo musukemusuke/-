@@ -1,12 +1,6 @@
 import discord
 import logging
-import os
-from dotenv import load_dotenv
 from utils import set_permissions_with_retry, setup_logger
-
-# .envファイルを読み込み
-load_dotenv()
-GUILD_ID = int(os.getenv("GUILD_ID")) if os.getenv("GUILD_ID") else None
 
 logger = setup_logger(__name__)
 
@@ -15,13 +9,9 @@ active_event_channel_id = None
 event_owner_id = None
 
 async def register_event_commands(bot):
-    """イベント管理用のスラッシュコマンドを登録（ギルド限定で即時反映）"""
-    TARGET_GUILD_ID = 1518079520911921192
-    guild = discord.Object(id=TARGET_GUILD_ID)
+    """イベント管理用のスラッシュコマンドを登録"""
     
-    logger.info(f"ギルドID {TARGET_GUILD_ID} に限定してスラッシュコマンドを登録します（即時反映用）")
-    
-    @bot.tree.command(name="hajimeru", description="イベント用のチャンネルを作成して開始します", guild=guild)
+    @bot.tree.command(name="hajimeru", description="イベント用のチャンネルを作成して開始します")
     async def hajimeru_command(interaction: discord.Interaction, content: str):
         global active_event_channel_id, event_owner_id
         
@@ -89,7 +79,7 @@ async def register_event_commands(bot):
             await interaction.edit_original_response(content=f"❌ イベントチャンネルの作成に失敗しました: {str(e)}")
 
 
-    @bot.tree.command(name="owari", description="アクティブなイベントチャンネルを終了・削除します", guild=guild)
+    @bot.tree.command(name="owari", description="アクティブなイベントチャンネルを終了・削除します")
     async def owari_command(interaction: discord.Interaction):
         global active_event_channel_id, event_owner_id
         

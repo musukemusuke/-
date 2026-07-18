@@ -90,17 +90,18 @@ async def on_ready():
             else:
                 logger.warning(f"読み取り専用チャンネルID {channel_id} がギルド {guild.name} で見つかりませんでした。")
     
-    # 先にイベント管理用コマンドを登録（同期する前に登録が必要）
+    # スラッシュコマンドをDiscordに同期（グローバル+各ギルドに即時反映）
+    await bot.tree.sync()
+    # 先にイベント管理用コマンドを登録してから同期する
     await register_event_commands(bot)
     logger.info("イベント管理コマンドの登録が完了しました")
     
-    # まずグローバルコマンドをクリーンアップ（古いコマンドを削除）
+    # グローバルコマンドとして全ギルドに同期
     await bot.tree.sync()
-    # ギルド限定コマンドを正しく同期（公式推奨の方法）
-    TARGET_GUILD_ID = 1518079520911921192
-    target_guild = discord.Object(id=TARGET_GUILD_ID)
-    await bot.tree.sync(guild=target_guild)
-    logger.info(f"対象ギルドID {TARGET_GUILD_ID} にスラッシュコマンドを同期しました（即時反映）")
+    # 各ギルドにも個別に同期して即時反映させる（全サーバーで即時表示）
+    for guild in bot.guilds:
+        await bot.tree.sync(guild=discord.Object(id=guild.id))
+        logger.info(f"ギルド {guild.name} ({guild.id}) にスラッシュコマンドを同期しました")
     logger.info("全てのスラッシュコマンドの同期が完了しました")
 
 
@@ -135,25 +136,6 @@ async def on_member_update(before, after):
         await process_member(bot, after, guild, read_only_channel_ids, ARCHIVE_CHANNEL_ID)
 
 
-
-# 手動同期用のテキストコマンド（管理者専用）
-@bot.command()
-async def sync(ctx):
-    """管理者専用：スラッシュコマンドを手動で同期する"""
-    # コマンド実行者が管理者か確認
-    if not ctx.author.guild_permissions.administrator:
-        await ctx.send("このコマンドは管理者専用です。", ephemeral=True)
-        return
-    
-    TARGET_GUILD_ID = 1518079520911921192
-    target_guild = discord.Object(id=TARGET_GUILD_ID)
-    
-    # まずグローバルコマンドをクリーンアップ
-    await bot.tree.sync()
-    # ギルド限定で同期
-    await bot.tree.sync(guild=target_guild)
-    await ctx.send(f"✅ ギルドID {TARGET_GUILD_ID} にスラッシュコマンドを手動で同期しました！数秒以内にコマンドが表示されます。")
-    logger.info("管理者によって手動同期が実行されました")
 
 # ボイスイベントをセットアップ
 setup_voice_events(bot)
