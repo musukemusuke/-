@@ -58,6 +58,25 @@ async def setup_hook():
 
 bot.setup_hook = setup_hook
 
+# 絶対に表示させるため、手動同期コマンドをコアに直接登録
+@bot.tree.command(name="sync", description="スラッシュコマンドを手動で同期します（管理者のみ）")
+@discord.app_commands.guild_only()
+async def sync_commands(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("このコマンドは管理者のみ実行できます。", ephemeral=True)
+        return
+    
+    await interaction.response.send_message("コマンドを同期中です...数秒で完了します！", ephemeral=True)
+    
+    try:
+        await bot.tree.sync()
+        await bot.tree.sync(guild=discord.Object(id=interaction.guild_id))
+        registered = [cmd.name for cmd in bot.tree.get_commands()]
+        await interaction.edit_original_response(content=f"✅ 同期完了！登録コマンド: {registered}\nこれでDiscordに全てのコマンドが表示されます。")
+        logger.info(f"✅ ギルド {interaction.guild.name} で管理者が手動同期を実行しました。登録コマンド: {registered}")
+    except Exception as e:
+        await interaction.edit_original_response(content=f"❌ 同期に失敗しました: {str(e)}")
+        logger.error(f"手動同期中にエラーが発生しました: {e}")
 
 # 最小限のコアロジックだけをbot.pyに残す
 @bot.event
