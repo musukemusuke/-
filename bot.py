@@ -50,10 +50,10 @@ from health_server import start_health_server
 
 # 全てのCogをロードするsetup_hook
 async def setup_hook():
-    # 機能ごとに独立したCogを順番にロード（GitHub Actions対応の完全なファイル指定）
-    await bot.load_extension('role_cog')       # 個人ロール管理
-    await bot.load_extension('voice_cog')      # ボイスチャンネル管理
-    await bot.load_extension('event_cog')      # イベントチャンネル管理
+    # cogフォルダ内のCogをロード
+    await bot.load_extension('cog.role_cog')       # 個人ロール管理
+    await bot.load_extension('cog.voice_cog')      # ボイスチャンネル管理
+    await bot.load_extension('cog.event_cog')      # イベントチャンネル管理
     logger.info("✅ 全てのCogが正常にロードされました")
 
 bot.setup_hook = setup_hook
